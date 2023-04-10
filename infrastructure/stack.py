@@ -1,5 +1,5 @@
 """Stack for Raktar."""
-import aws_cdk.aws_ec2 as ec2
+import aws_cdk.aws_dynamodb as dynamodb
 from aws_cdk import Environment as CdkEnvironment
 from aws_cdk import Stack
 from constructs import Construct
@@ -20,19 +20,34 @@ class RaktarStack(Stack):
         """Define the stack."""
         super().__init__(scope, construct_id, env=cdk_env)
 
-        vpc_id = self.node.try_get_context("vpc_id")
-        vpc = ec2.Vpc.from_vpc_attributes(self, "Vpc", vpc_id=vpc_id)
+        table = self.create_database_table()
         backend_function = RustFunction(
             self,
             "RaktarFunction",
-            bin_name="raktar-api",
+            bin_name="raktar-handler",
             description="Lambda function for the Raktar HTTP backend.",
-            vpc=vpc,
+            environment_variables={
+                "TABLE_NAME": table.table_name,
+            },
         )
+        table.grant_read_write_data(backend_function.function)
 
         WebApi(
             self,
             "Api",
-            api_name="raktar",
+            api_name="raktar-web",
             api_lambda=backend_function.function,
+        )
+
+    def create_database_table(self) -> dynamodb.Table:
+        return dynamodb.Table(
+            self,
+            "RegistryTable",
+            partition_key=dynamodb.Attribute(
+                name="pk", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(name="sk", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PROVISIONED,
+            read_capacity=5,
+            write_capacity=1,
         )

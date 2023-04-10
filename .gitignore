@@ -4,4 +4,4 @@ cdk.out/
 cdk.context.json
 __pycache__/
 .idea/
-./deploy.sh
+deploy.sh

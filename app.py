@@ -18,7 +18,7 @@ except KeyError as e:
 
 RaktarStack(
     app,
-    "RepositoryStack",
+    "RaktarStack",
     cdk_env=cdk_env,
 )
 
