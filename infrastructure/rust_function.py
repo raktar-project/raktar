@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Optional
 
+import aws_cdk.aws_ec2 as ec2
 from aws_cdk.aws_iam import Role
 from aws_cdk.aws_lambda import Architecture, Code, Function, Runtime
 from constructs import Construct
@@ -23,6 +24,7 @@ class RustFunction(Construct):
         environment_variables: Optional[Dict[str, str]] = None,
         role: Optional[Role] = None,
         architecture: Architecture = Architecture.ARM_64,
+        vpc: Optional[ec2.Vpc] = None,
     ):
         """Create a Rust function for a binary package."""
         super().__init__(scope, f"{construct_id}Wrapper")
@@ -41,6 +43,7 @@ class RustFunction(Construct):
             code=Code.from_asset(code_path.as_posix()),
             environment=environment_variables,
             role=role,
+            vpc=vpc,
         )
 
     @property
