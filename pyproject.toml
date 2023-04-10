@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "raktar-infrastructure"
+version = "0.1.0"
+description = "Raktar backend stack"
+authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
+license = "Private"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.group.dev.dependencies]
+black = "22.10.0"
+pre-commit = "^2.20.0"
+pytest = "^7.2.0"
+ruff = "^0.0.261"
+
+[tool.poetry.group.infrastructure.dependencies]
+aws-cdk-lib = "^2.73.0"
+aws-cdk-aws-apigatewayv2-alpha = "^2.73.0a0"
+aws-cdk-aws-apigatewayv2-integrations-alpha = "^2.73.0a0"
+aws-cdk-aws-apigatewayv2-authorizers-alpha = "^2.73.0a0"
+ziglang = "^0.10.0.post1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

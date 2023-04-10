@@ -1,0 +1,40 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: debug-statements
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+  - repo: https://github.com/psf/black
+    rev: 22.6.0
+    hooks:
+      - id: black
+        name: "Format with black"
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.10.1
+    hooks:
+      - id: isort
+        name: "Sort module imports"
+        args: ["--profile", "black", "--filter-files"]
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: 'v0.0.261'
+    hooks:
+      - id: ruff
+  - repo: local
+    hooks:
+      - id: rust-linting
+        name: Rust linting
+        description: Run cargo fmt on files included in the commit. rustfmt should be installed before-hand.
+        entry: cargo fmt --all --
+        pass_filenames: true
+        types: [file, rust]
+        language: system
+      - id: rust-clippy
+        name: Rust clippy
+        description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
+        entry: cargo clippy --all-targets --all-features -- -Dclippy::all
+        pass_filenames: false
+        types: [file, rust]
+        language: system
