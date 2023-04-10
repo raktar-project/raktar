@@ -1,7 +1,7 @@
 use poem::Route;
 use poem_lambda::Error;
-use poem_openapi::{OpenApi, OpenApiService};
 use poem_openapi::payload::PlainText;
+use poem_openapi::{OpenApi, OpenApiService};
 
 struct Api;
 
