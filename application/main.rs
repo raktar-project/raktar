@@ -1,80 +1,75 @@
 mod metadata;
 
-use aws_sdk_dynamodb::Client;
-use byteorder::{LittleEndian, ReadBytesExt};
-use poem::web::Data;
-use poem::{Body, Endpoint, EndpointExt, Route};
-use poem_lambda::Error;
-use poem_openapi::payload::Json;
-use poem_openapi::{Object, OpenApi, OpenApiService};
-use serde_dynamo::to_item;
 use std::io::Read;
+use std::net::SocketAddr;
+
+use aws_sdk_dynamodb::Client;
+use axum::body::Bytes;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::routing::{get, put};
+use axum::{Json, Router};
+use byteorder::{LittleEndian, ReadBytesExt};
+use serde::Serialize;
+use serde_dynamo::to_item;
 use tracing::{error, info};
 
 use crate::metadata::Metadata;
 
-#[derive(Object)]
+#[derive(Serialize)]
 struct PublishWarning {
     invalid_categories: Vec<String>,
     invalid_badges: Vec<String>,
     other: Vec<String>,
 }
 
-#[derive(Object)]
+#[derive(Serialize)]
 struct PublishResponse {
     warnings: Vec<PublishWarning>,
 }
 
-#[derive(Object)]
-struct ConfigResponse {
+#[derive(Serialize)]
+struct Config {
     dl: String,
     api: String,
 }
 
-struct Api;
+async fn get_config_json() -> (StatusCode, Json<Config>) {
+    let response = Config {
+        dl: "https://23g9zd8v1b.execute-api.eu-west-1.amazonaws.com/api/v1/crates".to_string(),
+        api: "https://23g9zd8v1b.execute-api.eu-west-1.amazonaws.com".to_string(),
+    };
 
-#[OpenApi]
-impl Api {
-    #[oai(path = "/config.json", method = "get")]
-    async fn config_json(&self) -> Json<ConfigResponse> {
-        let response = ConfigResponse {
-            dl: "https://23g9zd8v1b.execute-api.eu-west-1.amazonaws.com/api/v1/crates".to_string(),
-            api: "https://23g9zd8v1b.execute-api.eu-west-1.amazonaws.com".to_string(),
-        };
+    (StatusCode::OK, Json(response))
+}
 
-        Json(response)
+async fn publish_crate(State(db_client): State<Client>, body: Bytes) -> Json<PublishResponse> {
+    let mut bytes = body.bytes();
+    let mut cursor = std::io::Cursor::new(&mut bytes);
+    let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
+    let mut metadata_bytes = vec![0u8; metadata_length as usize];
+    cursor.read_exact(&mut metadata_bytes).unwrap();
+    let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
+
+    info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
+    let pk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.name.clone());
+    let sk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.vers.to_string());
+    let item = to_item(metadata).unwrap();
+    match db_client
+        .put_item()
+        .table_name(get_table_name())
+        .set_item(Some(item))
+        .item("pk", pk)
+        .item("sk", sk)
+        .send()
+        .await
+    {
+        Ok(_) => info!("successfully stored"),
+        Err(err) => error!("{:?}", err),
     }
 
-    #[oai(path = "/api/v1/crates/new", method = "put")]
-    async fn publish_crate(&self, db_client: Data<&Client>, body: Body) -> Json<PublishResponse> {
-        let bytes = body.into_bytes().await.unwrap();
-        let mut cursor = std::io::Cursor::new(bytes);
-        let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
-        let mut metadata_bytes = vec![0u8; metadata_length as usize];
-        cursor.read_exact(&mut metadata_bytes).unwrap();
-        let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
-
-        info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
-        let pk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.name.clone());
-        let sk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.vers.to_string());
-        let item = to_item(metadata).unwrap();
-        match db_client
-            .0
-            .put_item()
-            .table_name(get_table_name())
-            .set_item(Some(item))
-            .item("pk", pk)
-            .item("sk", sk)
-            .send()
-            .await
-        {
-            Ok(_) => info!("successfully stored"),
-            Err(err) => error!("{:?}", err),
-        }
-
-        let response = PublishResponse { warnings: vec![] };
-        Json(response)
-    }
+    let response = PublishResponse { warnings: vec![] };
+    Json(response)
 }
 
 fn get_table_name() -> String {
@@ -82,30 +77,28 @@ fn get_table_name() -> String {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() {
     tracing_subscriber::fmt().json().init();
 
     let aws_config = aws_config::from_env().load().await;
     let db_client = Client::new(&aws_config);
 
-    let api_service = OpenApiService::new(Api, "Raktar", "1.0").server("");
-    let ui = api_service.swagger_ui();
-    let app = Route::new()
-        .nest("/", api_service)
-        .nest("/doc", ui)
-        .data(db_client);
+    let app = Router::new()
+        .route("config.json", get(get_config_json))
+        .route("/api/v1/crates/new", put(publish_crate))
+        .with_state(db_client);
 
     run_app(app).await
 }
 
 #[cfg(feature = "local")]
-async fn run_app(app: impl Endpoint + 'static) -> Result<(), Error> {
-    let res = poem::Server::new(poem::listener::TcpListener::bind("127.0.0.1:3001"))
-        .name("raktar-local")
-        .run(app)
-        .await;
-
-    res.map_err(Error::from)
+async fn run_app(app: Router) {
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3025));
+    info!("listening on http://{}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .expect("service to start successfully");
 }
 
 #[cfg(not(feature = "local"))]
