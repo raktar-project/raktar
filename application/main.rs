@@ -1,10 +1,16 @@
+mod metadata;
+
 use aws_sdk_dynamodb::Client;
+use byteorder::{LittleEndian, ReadBytesExt};
 use poem::web::Data;
 use poem::{Body, Endpoint, EndpointExt, Route};
 use poem_lambda::Error;
 use poem_openapi::payload::Json;
 use poem_openapi::{Object, OpenApi, OpenApiService};
+use std::io::Read;
 use tracing::info;
+
+use crate::metadata::Metadata;
 
 #[derive(Object)]
 struct PublishWarning {
@@ -40,7 +46,14 @@ impl Api {
 
     #[oai(path = "/api/v1/crates/new", method = "put")]
     async fn publish_crate(&self, _db_client: Data<&Client>, body: Body) -> Json<PublishResponse> {
-        info!("{:?}", body);
+        let bytes = body.into_bytes().await.unwrap();
+        let mut cursor = std::io::Cursor::new(bytes);
+        let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
+        let mut metadata_bytes = vec![0u8; metadata_length as usize];
+        cursor.read_exact(&mut metadata_bytes).unwrap();
+        let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
+
+        info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
 
         let response = PublishResponse { warnings: vec![] };
         Json(response)
@@ -52,7 +65,7 @@ async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt().json().init();
 
     let aws_config = aws_config::from_env().load().await;
-    let db_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let db_client = Client::new(&aws_config);
 
     let api_service = OpenApiService::new(Api, "Raktar", "1.0").server("");
     let ui = api_service.swagger_ui();
