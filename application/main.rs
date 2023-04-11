@@ -28,8 +28,10 @@ struct PublishWarning {
 }
 
 #[derive(Serialize)]
-struct PublishResponse {
-    warnings: Vec<PublishWarning>,
+#[serde(untagged)]
+enum PublishResponse {
+    PublishSuccess { warnings: Vec<PublishWarning> },
+    PublishFailure { detail: String },
 }
 
 #[derive(Serialize)]
@@ -47,7 +49,10 @@ async fn get_config_json() -> (StatusCode, Json<Config>) {
     (StatusCode::OK, Json(response))
 }
 
-async fn publish_crate(State(db_client): State<Client>, body: Bytes) -> Json<PublishResponse> {
+async fn publish_crate(
+    State(db_client): State<Client>,
+    body: Bytes,
+) -> (StatusCode, Json<PublishResponse>) {
     let mut cursor = Cursor::new(body);
     let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
     let mut metadata_bytes = vec![0u8; metadata_length as usize];
@@ -58,21 +63,30 @@ async fn publish_crate(State(db_client): State<Client>, body: Bytes) -> Json<Pub
     let pk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.name.clone());
     let sk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.vers.to_string());
     let item = to_item(metadata).unwrap();
-    match db_client
+    let (status_code, response) = match db_client
         .put_item()
         .table_name(get_table_name())
         .set_item(Some(item))
         .item("pk", pk)
         .item("sk", sk)
+        .condition_expression("attribute_not_exists(sk)")
         .send()
         .await
     {
-        Ok(_) => info!("successfully stored"),
-        Err(err) => error!("{:?}", err),
-    }
+        Ok(_) => (
+            StatusCode::OK,
+            PublishResponse::PublishSuccess { warnings: vec![] },
+        ),
+        Err(err) => {
+            error!("{:?}", err);
+            let response = PublishResponse::PublishFailure {
+                detail: format!("{}", err),
+            };
+            (StatusCode::BAD_REQUEST, response)
+        }
+    };
 
-    let response = PublishResponse { warnings: vec![] };
-    Json(response)
+    (status_code, Json(response))
 }
 
 fn get_table_name() -> String {
