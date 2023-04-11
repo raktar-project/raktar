@@ -1914,6 +1914,7 @@ version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a85510cf5013c9739f98d33c0da2e8d069ec394950568162ea13d581093bef08"
 dependencies = [
+ "aws-sdk-dynamodb",
  "base64 0.21.0",
  "serde",
 ]

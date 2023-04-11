@@ -21,7 +21,7 @@ poem-lambda = "^1.3.50"
 poem-openapi = { version = "^2.0.21", features = ["swagger-ui"] }
 semver = { version = "1.0.17", features = ["serde"] }
 serde = { version = "1.0.159", features = ["derive"] }
-serde_dynamo = "4.2.0"
+serde_dynamo = { version = "4.2.0", features = ["aws-sdk-dynamodb+0_25"] }
 serde_json = "1.0.95"
 tokio = { version = "^1.23.0", features = ["macros", "rt-multi-thread"] }
 tracing = "^0.1.37"

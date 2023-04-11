@@ -7,8 +7,9 @@ use poem::{Body, Endpoint, EndpointExt, Route};
 use poem_lambda::Error;
 use poem_openapi::payload::Json;
 use poem_openapi::{Object, OpenApi, OpenApiService};
+use serde_dynamo::to_item;
 use std::io::Read;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::metadata::Metadata;
 
@@ -45,7 +46,7 @@ impl Api {
     }
 
     #[oai(path = "/api/v1/crates/new", method = "put")]
-    async fn publish_crate(&self, _db_client: Data<&Client>, body: Body) -> Json<PublishResponse> {
+    async fn publish_crate(&self, db_client: Data<&Client>, body: Body) -> Json<PublishResponse> {
         let bytes = body.into_bytes().await.unwrap();
         let mut cursor = std::io::Cursor::new(bytes);
         let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
@@ -54,10 +55,30 @@ impl Api {
         let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
 
         info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
+        let pk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.name.clone());
+        let sk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.vers.to_string());
+        let item = to_item(metadata).unwrap();
+        match db_client
+            .0
+            .put_item()
+            .table_name(get_table_name())
+            .set_item(Some(item))
+            .item("pk", pk)
+            .item("sk", sk)
+            .send()
+            .await
+        {
+            Ok(_) => info!("successfully stored"),
+            Err(err) => error!("{:?}", err),
+        }
 
         let response = PublishResponse { warnings: vec![] };
         Json(response)
     }
+}
+
+fn get_table_name() -> String {
+    std::env::var("TABLE_NAME").unwrap()
 }
 
 #[tokio::main]
