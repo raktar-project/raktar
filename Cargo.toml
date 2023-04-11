@@ -17,7 +17,7 @@ aws-sdk-dynamodb = "^0.25.1"
 aws-sdk-s3 = "^0.25.0"
 axum = "^0.6.12"
 byteorder = "^1.4.3"
-lambda-web = "^0.2.1"
+lambda-web = { version = "^0.2.1", features = ["hyper"] }
 semver = { version = "1.0.17", features = ["serde"] }
 serde = { version = "1.0.159", features = ["derive"] }
 serde_dynamo = { version = "4.2.0", features = ["aws-sdk-dynamodb+0_25"] }

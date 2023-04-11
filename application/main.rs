@@ -1,8 +1,11 @@
+mod api;
 mod metadata;
 
-use std::io::Read;
-use std::net::SocketAddr;
+use std::io::{Cursor, Read};
 
+use crate::api::index::{
+    get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
+};
 use aws_sdk_dynamodb::Client;
 use axum::body::Bytes;
 use axum::extract::State;
@@ -10,6 +13,7 @@ use axum::http::StatusCode;
 use axum::routing::{get, put};
 use axum::{Json, Router};
 use byteorder::{LittleEndian, ReadBytesExt};
+use lambda_web::run_hyper_on_lambda;
 use serde::Serialize;
 use serde_dynamo::to_item;
 use tracing::{error, info};
@@ -44,8 +48,7 @@ async fn get_config_json() -> (StatusCode, Json<Config>) {
 }
 
 async fn publish_crate(State(db_client): State<Client>, body: Bytes) -> Json<PublishResponse> {
-    let mut bytes = body.bytes();
-    let mut cursor = std::io::Cursor::new(&mut bytes);
+    let mut cursor = Cursor::new(body);
     let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
     let mut metadata_bytes = vec![0u8; metadata_length as usize];
     cursor.read_exact(&mut metadata_bytes).unwrap();
@@ -84,8 +87,18 @@ async fn main() {
     let db_client = Client::new(&aws_config);
 
     let app = Router::new()
-        .route("config.json", get(get_config_json))
+        .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
+        .route("/1/:crate_name", get(get_info_for_short_name_crate))
+        .route("/2/:crate_name", get(get_info_for_short_name_crate))
+        .route(
+            "/3/:first_letter/:crate_name",
+            get(get_info_for_three_letter_crate),
+        )
+        .route(
+            "/:first_two/:second_two/:crate_name",
+            get(get_info_for_long_name_crate),
+        )
         .with_state(db_client);
 
     run_app(app).await
@@ -93,7 +106,7 @@ async fn main() {
 
 #[cfg(feature = "local")]
 async fn run_app(app: Router) {
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3025));
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3025));
     info!("listening on http://{}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -102,6 +115,8 @@ async fn run_app(app: Router) {
 }
 
 #[cfg(not(feature = "local"))]
-async fn run_app(app: impl Endpoint + 'static) -> Result<(), Error> {
-    poem_lambda::run(app).await
+async fn run_app(app: Router) {
+    run_hyper_on_lambda(app)
+        .await
+        .expect("app to run on Lambda successfully")
 }
