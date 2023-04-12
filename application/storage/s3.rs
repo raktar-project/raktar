@@ -42,4 +42,18 @@ impl CrateStorage for S3Storage {
 
         Ok(())
     }
+
+    async fn get_crate(&self, crate_name: &str, version: Version) -> Result<Vec<u8>> {
+        let key = self.crate_key(crate_name, version);
+        let output = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await?;
+
+        let data = output.body.collect().await?;
+        Ok(data.into_bytes().to_vec())
+    }
 }

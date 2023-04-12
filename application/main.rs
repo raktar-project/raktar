@@ -4,6 +4,7 @@ pub mod db;
 pub mod metadata;
 pub mod storage;
 
+use crate::api::download::download_crate;
 use crate::api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
@@ -44,6 +45,10 @@ async fn main() {
     let app = Router::new()
         .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
+        .route(
+            "/api/v1/crates/:crate_name/:version/download",
+            get(download_crate),
+        )
         .route("/1/:crate_name", get(get_info_for_short_name_crate))
         .route("/2/:crate_name", get(get_info_for_short_name_crate))
         .route(
