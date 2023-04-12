@@ -1,4 +1,3 @@
-use aws_sdk_dynamodb::Client;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -9,8 +8,10 @@ use serde_dynamo::to_item;
 use std::io::{Cursor, Read};
 use tracing::{error, info};
 
+use crate::app_state::AppState;
 use crate::db::get_table_name;
 use crate::metadata::Metadata;
+use crate::storage::CrateStorage;
 
 #[derive(Serialize)]
 pub struct PublishWarning {
@@ -26,21 +27,32 @@ pub enum PublishResponse {
     PublishFailure { detail: String },
 }
 
-pub async fn publish_crate(
-    State(db_client): State<Client>,
+pub async fn publish_crate<S: CrateStorage>(
+    State(app_state): State<AppState<S>>,
     body: Bytes,
 ) -> (StatusCode, Json<PublishResponse>) {
     let mut cursor = Cursor::new(body);
+
+    // read metadata bytes
     let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
     let mut metadata_bytes = vec![0u8; metadata_length as usize];
     cursor.read_exact(&mut metadata_bytes).unwrap();
     let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
 
+    // read crate bytes
+    let crate_length = cursor.read_u32::<LittleEndian>().unwrap();
+    let mut crate_bytes = vec![0u8; crate_length as usize];
+    cursor.read_exact(&mut crate_bytes).unwrap();
+
     info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
+    let vers = metadata.vers.clone();
+    let crate_name = metadata.name.clone();
+
     let pk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.name.clone());
-    let sk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.vers.to_string());
+    let sk = aws_sdk_dynamodb::types::AttributeValue::S(vers.to_string());
     let item = to_item(metadata).unwrap();
-    let (status_code, response) = match db_client
+    let (status_code, response) = match &app_state
+        .db_client
         .put_item()
         .table_name(get_table_name())
         .set_item(Some(item))
@@ -62,6 +74,11 @@ pub async fn publish_crate(
             (StatusCode::BAD_REQUEST, response)
         }
     };
+    app_state
+        .storage
+        .store_crate(&crate_name, vers, crate_bytes)
+        .await
+        .expect("to be able to store crate");
 
     (status_code, Json(response))
 }

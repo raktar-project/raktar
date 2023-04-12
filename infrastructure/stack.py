@@ -1,5 +1,6 @@
 """Stack for Raktar."""
 import aws_cdk.aws_dynamodb as dynamodb
+import aws_cdk.aws_s3 as s3
 from aws_cdk import Environment as CdkEnvironment
 from aws_cdk import Stack
 from constructs import Construct
@@ -21,6 +22,7 @@ class RaktarStack(Stack):
         super().__init__(scope, construct_id, env=cdk_env)
 
         table = self.create_database_table()
+        bucket = self.create_s3_bucket()
         backend_function = RustFunction(
             self,
             "RaktarFunction",
@@ -28,9 +30,11 @@ class RaktarStack(Stack):
             description="Lambda function for the Raktar HTTP backend.",
             environment_variables={
                 "TABLE_NAME": table.table_name,
+                "CRATES_BUCKET_NAME": bucket.bucket_name,
             },
         )
         table.grant_read_write_data(backend_function.function)
+        bucket.grant_read_write(backend_function.function)
 
         WebApi(
             self,
@@ -51,3 +55,6 @@ class RaktarStack(Stack):
             read_capacity=5,
             write_capacity=1,
         )
+
+    def create_s3_bucket(self) -> s3.Bucket:
+        return s3.Bucket(self, "CratesBucket")
