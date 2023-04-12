@@ -1,7 +1,7 @@
 mod api;
 pub mod app_state;
 pub mod db;
-pub mod metadata;
+pub mod models;
 pub mod storage;
 
 use crate::api::download::download_crate;

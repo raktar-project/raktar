@@ -4,7 +4,15 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DependencyKind {
+    Dev,
+    Build,
+    Normal,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct MetadataDependency {
     pub name: String,
     pub version_req: VersionReq,
@@ -12,7 +20,7 @@ pub struct MetadataDependency {
     pub optional: bool,
     pub default_features: bool,
     pub target: Option<String>,
-    pub kind: Option<String>,
+    pub kind: Option<DependencyKind>,
     pub registry: Option<Url>,
     pub explicit_name_in_toml: Option<String>,
 }

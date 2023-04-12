@@ -1,16 +1,21 @@
+use anyhow::Result;
+use aws_sdk_dynamodb::Client;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
 use byteorder::{LittleEndian, ReadBytesExt};
+use hex::ToHex;
 use serde::Serialize;
 use serde_dynamo::to_item;
+use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 use tracing::{error, info};
 
 use crate::app_state::AppState;
 use crate::db::get_table_name;
-use crate::metadata::Metadata;
+use crate::models::index::PackageInfo;
+use crate::models::metadata::Metadata;
 use crate::storage::CrateStorage;
 
 #[derive(Serialize)]
@@ -47,20 +52,10 @@ pub async fn publish_crate<S: CrateStorage>(
     info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
     let vers = metadata.vers.clone();
     let crate_name = metadata.name.clone();
+    let checksum: String = Sha256::digest(&crate_bytes).encode_hex();
+    let package_info = PackageInfo::from_metadata(metadata, &checksum);
 
-    let pk = aws_sdk_dynamodb::types::AttributeValue::S(metadata.name.clone());
-    let sk = aws_sdk_dynamodb::types::AttributeValue::S(vers.to_string());
-    let item = to_item(metadata).unwrap();
-    let (status_code, response) = match &app_state
-        .db_client
-        .put_item()
-        .table_name(get_table_name())
-        .set_item(Some(item))
-        .item("pk", pk)
-        .item("sk", sk)
-        .condition_expression("attribute_not_exists(sk)")
-        .send()
-        .await
+    let (status_code, response) = match store_package_info(&app_state.db_client, package_info).await
     {
         Ok(_) => (
             StatusCode::OK,
@@ -81,4 +76,22 @@ pub async fn publish_crate<S: CrateStorage>(
         .expect("to be able to store crate");
 
     (status_code, Json(response))
+}
+
+async fn store_package_info(db_client: &Client, package_info: PackageInfo) -> Result<()> {
+    let pk = aws_sdk_dynamodb::types::AttributeValue::S(package_info.name.clone());
+    let sk = aws_sdk_dynamodb::types::AttributeValue::S(package_info.vers.to_string());
+
+    let item = to_item(package_info).unwrap();
+    db_client
+        .put_item()
+        .table_name(get_table_name())
+        .set_item(Some(item))
+        .item("pk", pk)
+        .item("sk", sk)
+        .condition_expression("attribute_not_exists(sk)")
+        .send()
+        .await?;
+
+    Ok(())
 }
