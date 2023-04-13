@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::models::metadata::{DependencyKind, Metadata, MetadataDependency};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Dependency {
     pub name: String,
     pub req: semver::VersionReq,
@@ -20,7 +20,7 @@ pub struct Dependency {
 
 /// The package information returned from the index as described in the Cargo reference:
 /// https://doc.rust-lang.org/cargo/reference/registry-index.html
-#[derive(Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PackageInfo {
     pub name: String,
     pub vers: Version,
