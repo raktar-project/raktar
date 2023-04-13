@@ -56,12 +56,11 @@ async fn get_crate_info(db_client: &Client, crate_name: &str) -> Result<String> 
         None => bail!("crate not found"),
         Some(items) => {
             let infos = from_items::<PackageInfo>(items.to_vec())?;
-            let info_strings: Vec<String> = infos
+            Ok(infos
                 .into_iter()
                 .map(|info| serde_json::to_string(&info).unwrap())
-                .collect();
-
-            Ok(info_strings.join("\n"))
+                .collect::<Vec<_>>()
+                .join("\n"))
         }
     }
 }
