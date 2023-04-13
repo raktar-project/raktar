@@ -1,4 +1,4 @@
-"""A serverless web API designed for FastAPI."""
+"""The web API for the registry."""
 from aws_cdk import CfnOutput
 from aws_cdk.aws_apigatewayv2_alpha import (
     CorsHttpMethod,
@@ -12,7 +12,6 @@ from constructs import Construct
 
 ALLOWED_HEADERS = [
     "Authorization",
-    "Val-Cuid",
     "Content-Type",
 ]
 ALLOWED_METHODS = [
