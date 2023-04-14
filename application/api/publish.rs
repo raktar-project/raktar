@@ -1,11 +1,11 @@
-use anyhow::Result;
+use aws_sdk_dynamodb::operation::put_item::PutItemError;
 use aws_sdk_dynamodb::Client;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::StatusCode;
 use axum::Json;
 use byteorder::{LittleEndian, ReadBytesExt};
 use hex::ToHex;
+use semver::Version;
 use serde::Serialize;
 use serde_dynamo::to_item;
 use sha2::{Digest, Sha256};
@@ -14,28 +14,22 @@ use tracing::{error, info};
 
 use crate::app_state::AppState;
 use crate::db::get_table_name;
+use crate::error::{AppError, AppResult};
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::storage::CrateStorage;
 
 #[derive(Serialize)]
-pub struct PublishWarning {
+pub struct PublishResponse {
     invalid_categories: Vec<String>,
     invalid_badges: Vec<String>,
     other: Vec<String>,
 }
 
-#[derive(Serialize)]
-#[serde(untagged)]
-pub enum PublishResponse {
-    PublishSuccess { warnings: Vec<PublishWarning> },
-    PublishFailure { detail: String },
-}
-
 pub async fn publish_crate<S: CrateStorage>(
     State(app_state): State<AppState<S>>,
     body: Bytes,
-) -> (StatusCode, Json<PublishResponse>) {
+) -> AppResult<Json<PublishResponse>> {
     let mut cursor = Cursor::new(body);
 
     // read metadata bytes
@@ -55,35 +49,32 @@ pub async fn publish_crate<S: CrateStorage>(
     let checksum: String = Sha256::digest(&crate_bytes).encode_hex();
     let package_info = PackageInfo::from_metadata(metadata, &checksum);
 
-    let (status_code, response) = match store_package_info(&app_state.db_client, package_info).await
-    {
-        Ok(_) => (
-            StatusCode::OK,
-            PublishResponse::PublishSuccess { warnings: vec![] },
-        ),
-        Err(err) => {
-            error!("{:?}", err);
-            let response = PublishResponse::PublishFailure {
-                detail: format!("{}", err),
-            };
-            (StatusCode::BAD_REQUEST, response)
-        }
-    };
+    store_package_info(&app_state.db_client, &crate_name, &vers, package_info).await?;
     app_state
         .storage
         .store_crate(&crate_name, vers, crate_bytes)
         .await
-        .expect("to be able to store crate");
-
-    (status_code, Json(response))
+        .map(|_| {
+            Json(PublishResponse {
+                invalid_categories: vec![],
+                invalid_badges: vec![],
+                other: vec![],
+            })
+        })
+        .map_err(Into::into)
 }
 
-async fn store_package_info(db_client: &Client, package_info: PackageInfo) -> Result<()> {
+async fn store_package_info(
+    db_client: &Client,
+    crate_name: &str,
+    version: &Version,
+    package_info: PackageInfo,
+) -> AppResult<()> {
     let pk = aws_sdk_dynamodb::types::AttributeValue::S(package_info.name.clone());
     let sk = aws_sdk_dynamodb::types::AttributeValue::S(package_info.vers.to_string());
 
     let item = to_item(package_info).unwrap();
-    db_client
+    match db_client
         .put_item()
         .table_name(get_table_name())
         .set_item(Some(item))
@@ -91,7 +82,31 @@ async fn store_package_info(db_client: &Client, package_info: PackageInfo) -> Re
         .item("sk", sk)
         .condition_expression("attribute_not_exists(sk)")
         .send()
-        .await?;
+        .await
+    {
+        Ok(_) => {
+            info!(
+                crate_name = crate_name,
+                version = version.to_string(),
+                "persisted package info"
+            );
+            Ok(())
+        }
+        Err(err) => {
+            let err = match err.into_service_error() {
+                PutItemError::ConditionalCheckFailedException(_) => {
+                    AppError::DuplicateCrateVersion {
+                        crate_name: crate_name.to_string(),
+                        version: version.clone(),
+                    }
+                }
+                _ => {
+                    error!("failed to store package info");
+                    anyhow::anyhow!("unexpected error in persisting crate").into()
+                }
+            };
 
-    Ok(())
+            Err(err)
+        }
+    }
 }

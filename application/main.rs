@@ -1,8 +1,16 @@
 mod api;
 pub mod app_state;
 pub mod db;
+pub mod error;
 pub mod models;
 pub mod storage;
+
+use aws_sdk_dynamodb::Client;
+use axum::http::StatusCode;
+use axum::routing::{get, put};
+use axum::{Json, Router};
+use lambda_web::run_hyper_on_lambda;
+use serde::Serialize;
 
 use crate::api::download::download_crate;
 use crate::api::index::{
@@ -11,12 +19,6 @@ use crate::api::index::{
 use crate::api::publish::publish_crate;
 use crate::app_state::AppState;
 use crate::storage::S3Storage;
-use aws_sdk_dynamodb::Client;
-use axum::http::StatusCode;
-use axum::routing::{get, put};
-use axum::{Json, Router};
-use lambda_web::run_hyper_on_lambda;
-use serde::Serialize;
 
 #[derive(Serialize)]
 struct Config {
