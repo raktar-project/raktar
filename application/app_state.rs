@@ -1,9 +1,8 @@
-use aws_sdk_dynamodb::Client as DynamoDBClient;
-
+use crate::repository::Repository;
 use crate::storage::CrateStorage;
 
 #[derive(Clone)]
-pub struct AppState<S: CrateStorage> {
-    pub db_client: DynamoDBClient,
+pub struct AppState<R: Repository, S: CrateStorage> {
+    pub repository: R,
     pub storage: S,
 }

@@ -20,6 +20,7 @@ use crate::api::publish::publish_crate;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
 use crate::app_state::AppState;
+use crate::repository::DynamoDBRepository;
 use crate::storage::S3Storage;
 
 #[derive(Serialize)]
@@ -43,8 +44,12 @@ async fn main() {
 
     let aws_config = aws_config::from_env().load().await;
     let db_client = Client::new(&aws_config);
+    let repository = DynamoDBRepository::new(db_client);
     let storage = S3Storage::new().await;
-    let app_state = AppState { db_client, storage };
+    let app_state = AppState {
+        repository,
+        storage,
+    };
 
     let app = Router::new()
         .route("/config.json", get(get_config_json))
