@@ -6,9 +6,9 @@ use serde_dynamo::aws_sdk_dynamodb_0_25::from_items;
 use tracing::error;
 
 use crate::app_state::AppState;
-use crate::db::get_table_name;
 use crate::error::{AppError, AppResult};
 use crate::models::index::PackageInfo;
+use crate::repository::dynamodb::get_table_name;
 use crate::storage::CrateStorage;
 
 pub async fn get_info_for_short_name_crate<S: CrateStorage>(

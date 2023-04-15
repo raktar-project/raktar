@@ -13,10 +13,10 @@ use std::io::{Cursor, Read};
 use tracing::{error, info};
 
 use crate::app_state::AppState;
-use crate::db::get_table_name;
 use crate::error::{AppError, AppResult};
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
+use crate::repository::dynamodb::get_table_name;
 use crate::storage::CrateStorage;
 
 #[derive(Serialize)]

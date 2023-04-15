@@ -1,8 +1,8 @@
 mod api;
 pub mod app_state;
-pub mod db;
 pub mod error;
 pub mod models;
+pub mod repository;
 pub mod storage;
 
 use aws_sdk_dynamodb::Client;
@@ -17,6 +17,7 @@ use crate::api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
 use crate::api::publish::publish_crate;
+use crate::api::unyank::unyank;
 use crate::api::yank::yank;
 use crate::app_state::AppState;
 use crate::storage::S3Storage;
@@ -49,6 +50,7 @@ async fn main() {
         .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
         .route("/api/v1/crates/:crate_name/:version/yank", delete(yank))
+        .route("/api/v1/crates/:crate_name/:version/unyank", put(unyank))
         .route(
             "/api/v1/crates/:crate_name/:version/download",
             get(download_crate),

@@ -15,13 +15,13 @@ pub struct Response {
     ok: bool,
 }
 
-pub async fn yank<S: CrateStorage>(
+pub async fn unyank<S: CrateStorage>(
     Path((crate_name, version)): Path<(String, String)>,
     State(app_state): State<AppState<S>>,
 ) -> AppResult<Json<Response>> {
     let vers = Version::from_str(&version).expect("version to be valid");
 
-    set_yanked(&app_state.db_client, &crate_name, &vers, true).await?;
+    set_yanked(&app_state.db_client, &crate_name, &vers, false).await?;
 
     let response = Json(Response { ok: true });
     Ok(response)
