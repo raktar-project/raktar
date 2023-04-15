@@ -7,7 +7,7 @@ pub mod storage;
 
 use aws_sdk_dynamodb::Client;
 use axum::http::StatusCode;
-use axum::routing::{get, put};
+use axum::routing::{delete, get, put};
 use axum::{Json, Router};
 use lambda_web::run_hyper_on_lambda;
 use serde::Serialize;
@@ -17,6 +17,7 @@ use crate::api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
 use crate::api::publish::publish_crate;
+use crate::api::yank::yank;
 use crate::app_state::AppState;
 use crate::storage::S3Storage;
 
@@ -47,6 +48,7 @@ async fn main() {
     let app = Router::new()
         .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
+        .route("/api/v1/crates/:crate_name/:version/yank", delete(yank))
         .route(
             "/api/v1/crates/:crate_name/:version/download",
             get(download_crate),
