@@ -7,6 +7,7 @@ from constructs import Construct
 
 from infrastructure.api import WebApi
 from infrastructure.rust_function import RustFunction
+from infrastructure.settings import Settings
 
 
 class RaktarStack(Stack):
@@ -17,9 +18,11 @@ class RaktarStack(Stack):
         scope: Construct,
         construct_id: str,
         cdk_env: CdkEnvironment,
+        settings: Settings,
     ) -> None:
         """Define the stack."""
-        super().__init__(scope, construct_id, env=cdk_env)
+        super().__init__(scope, construct_id, env=cdk_env, cross_region_references=True)
+        self.settings = settings
 
         table = self.create_database_table()
         bucket = self.create_s3_bucket()
@@ -31,6 +34,7 @@ class RaktarStack(Stack):
             environment_variables={
                 "TABLE_NAME": table.table_name,
                 "CRATES_BUCKET_NAME": bucket.bucket_name,
+                "DOMAIN_NAME": settings.domain_name,
             },
         )
         table.grant_read_write_data(backend_function.function)
@@ -41,6 +45,7 @@ class RaktarStack(Stack):
             "Api",
             api_name="raktar-web",
             api_lambda=backend_function.function,
+            settings=settings,
         )
 
     def create_database_table(self) -> dynamodb.Table:

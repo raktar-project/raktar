@@ -29,10 +29,10 @@ struct Config {
 }
 
 async fn get_config_json() -> (StatusCode, Json<Config>) {
-    let response = Config {
-        dl: "https://23g9zd8v1b.execute-api.eu-west-1.amazonaws.com/api/v1/crates".to_string(),
-        api: "https://23g9zd8v1b.execute-api.eu-west-1.amazonaws.com".to_string(),
-    };
+    let domain_name = std::env::var("DOMAIN_NAME").unwrap();
+    let dl = format!("https://{}/api/v1/crates", domain_name);
+    let api = format!("https://{}", domain_name);
+    let response = Config { dl, api };
 
     (StatusCode::OK, Json(response))
 }

@@ -3,6 +3,7 @@ import os
 
 import aws_cdk as cdk
 
+from infrastructure.settings import Settings
 from infrastructure.stack import RaktarStack
 
 app = cdk.App()
@@ -16,10 +17,13 @@ except KeyError as e:
         "Could not find AWS credentials, please ensure you're logged in."
     ) from e
 
+settings = Settings()
+
 RaktarStack(
     app,
     "RaktarStack",
     cdk_env=cdk_env,
+    settings=settings,
 )
 
 app.synth()

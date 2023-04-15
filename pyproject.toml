@@ -3,7 +3,7 @@ name = "raktar-infrastructure"
 version = "0.1.0"
 description = "Raktar backend stack"
 authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
-license = "Private"
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -19,6 +19,7 @@ aws-cdk-lib = "^2.73.0"
 aws-cdk-aws-apigatewayv2-alpha = "^2.73.0a0"
 aws-cdk-aws-apigatewayv2-integrations-alpha = "^2.73.0a0"
 aws-cdk-aws-apigatewayv2-authorizers-alpha = "^2.73.0a0"
+pydantic = { version = "^1.10.7", extras = ["dotenv"] }
 ziglang = "^0.10.0.post1"
 
 [build-system]
