@@ -11,7 +11,7 @@ pub async fn get_info_for_short_name_crate<R: Repository, S: CrateStorage>(
 ) -> AppResult<String> {
     assert_eq!(1, crate_name.len());
 
-    app_state.repository.get_crate_info(&crate_name).await
+    app_state.repository.get_package_info(&crate_name).await
 }
 
 pub async fn get_info_for_three_letter_crate<R: Repository, S: CrateStorage>(
@@ -20,7 +20,7 @@ pub async fn get_info_for_three_letter_crate<R: Repository, S: CrateStorage>(
 ) -> AppResult<String> {
     assert_eq!(Some(first_letter.as_ref()), crate_name.get(0..1));
 
-    app_state.repository.get_crate_info(&crate_name).await
+    app_state.repository.get_package_info(&crate_name).await
 }
 
 pub async fn get_info_for_long_name_crate<R: Repository, S: CrateStorage>(
@@ -30,5 +30,5 @@ pub async fn get_info_for_long_name_crate<R: Repository, S: CrateStorage>(
     assert_eq!(Some(first_two.as_ref()), crate_name.get(0..2));
     assert_eq!(Some(second_two.as_ref()), crate_name.get(2..4));
 
-    app_state.repository.get_crate_info(&crate_name).await
+    app_state.repository.get_package_info(&crate_name).await
 }

@@ -24,17 +24,25 @@ impl DynamoDBRepository {
             table_name: std::env::var("TABLE_NAME").unwrap(),
         }
     }
+
+    fn get_package_key(crate_name: &str) -> AttributeValue {
+        AttributeValue::S(format!("CRT#{}", crate_name))
+    }
+
+    fn get_package_version_key(version: &Version) -> AttributeValue {
+        AttributeValue::S(format!("V#{}", version))
+    }
 }
 
 #[async_trait::async_trait]
 impl Repository for DynamoDBRepository {
-    async fn get_crate_info(&self, crate_name: &str) -> AppResult<String> {
+    async fn get_package_info(&self, crate_name: &str) -> AppResult<String> {
         let result = self
             .db_client
             .query()
             .table_name(&self.table_name)
             .key_condition_expression("pk = :pk")
-            .expression_attribute_values(":pk", AttributeValue::S(crate_name.to_string()))
+            .expression_attribute_values(":pk", DynamoDBRepository::get_package_key(crate_name))
             .send()
             .await
             .map_err(|err| {
@@ -68,8 +76,8 @@ impl Repository for DynamoDBRepository {
         version: &Version,
         package_info: PackageInfo,
     ) -> AppResult<()> {
-        let pk = aws_sdk_dynamodb::types::AttributeValue::S(package_info.name.clone());
-        let sk = aws_sdk_dynamodb::types::AttributeValue::S(package_info.vers.to_string());
+        let pk = DynamoDBRepository::get_package_key(&package_info.name);
+        let sk = DynamoDBRepository::get_package_version_key(&package_info.vers);
 
         let item = to_item(package_info).unwrap();
         match self
@@ -111,11 +119,14 @@ impl Repository for DynamoDBRepository {
     }
 
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()> {
+        let pk = DynamoDBRepository::get_package_key(crate_name);
+        let sk = DynamoDBRepository::get_package_version_key(version);
+
         self.db_client
             .update_item()
             .table_name(&self.table_name)
-            .key("pk", AttributeValue::S(crate_name.to_string()))
-            .key("sk", AttributeValue::S(version.to_string()))
+            .key("pk", pk)
+            .key("sk", sk)
             .update_expression("SET yanked = :y")
             .condition_expression("attribute_exists(sk)")
             .expression_attribute_values(":y", AttributeValue::Bool(yanked))

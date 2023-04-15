@@ -4,7 +4,7 @@ use semver::Version;
 
 #[async_trait::async_trait]
 pub trait Repository: Clone + Send + Sync + 'static {
-    async fn get_crate_info(&self, crate_name: &str) -> AppResult<String>;
+    async fn get_package_info(&self, crate_name: &str) -> AppResult<String>;
     async fn store_package_info(
         &self,
         crate_name: &str,
