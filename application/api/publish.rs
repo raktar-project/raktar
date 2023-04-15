@@ -30,18 +30,8 @@ pub async fn publish_crate<S: CrateStorage>(
     State(app_state): State<AppState<S>>,
     body: Bytes,
 ) -> AppResult<Json<PublishResponse>> {
-    let mut cursor = Cursor::new(body);
-
-    // read metadata bytes
-    let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
-    let mut metadata_bytes = vec![0u8; metadata_length as usize];
-    cursor.read_exact(&mut metadata_bytes).unwrap();
+    let (metadata_bytes, crate_bytes) = read_body(body);
     let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
-
-    // read crate bytes
-    let crate_length = cursor.read_u32::<LittleEndian>().unwrap();
-    let mut crate_bytes = vec![0u8; crate_length as usize];
-    cursor.read_exact(&mut crate_bytes).unwrap();
 
     info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
     let vers = metadata.vers.clone();
@@ -53,15 +43,29 @@ pub async fn publish_crate<S: CrateStorage>(
     app_state
         .storage
         .store_crate(&crate_name, vers, crate_bytes)
-        .await
-        .map(|_| {
-            Json(PublishResponse {
-                invalid_categories: vec![],
-                invalid_badges: vec![],
-                other: vec![],
-            })
-        })
-        .map_err(Into::into)
+        .await?;
+
+    Ok(Json(PublishResponse {
+        invalid_categories: vec![],
+        invalid_badges: vec![],
+        other: vec![],
+    }))
+}
+
+fn read_body(body: Bytes) -> (Vec<u8>, Vec<u8>) {
+    let mut cursor = Cursor::new(body);
+
+    // read metadata bytes
+    let metadata_length = cursor.read_u32::<LittleEndian>().unwrap();
+    let mut metadata_bytes = vec![0u8; metadata_length as usize];
+    cursor.read_exact(&mut metadata_bytes).unwrap();
+
+    // read crate bytes
+    let crate_length = cursor.read_u32::<LittleEndian>().unwrap();
+    let mut crate_bytes = vec![0u8; crate_length as usize];
+    cursor.read_exact(&mut crate_bytes).unwrap();
+
+    (metadata_bytes, crate_bytes)
 }
 
 async fn store_package_info(
