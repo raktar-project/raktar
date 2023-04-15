@@ -5,31 +5,14 @@ pub mod models;
 pub mod repository;
 pub mod storage;
 
-use crate::api::build_router;
 use aws_sdk_dynamodb::Client;
-use axum::http::StatusCode;
-use axum::{Json, Router};
+use axum::Router;
 use lambda_web::run_hyper_on_lambda;
-use serde::Serialize;
 
+use crate::api::build_router;
 use crate::app_state::AppState;
 use crate::repository::DynamoDBRepository;
 use crate::storage::S3Storage;
-
-#[derive(Serialize)]
-struct Config {
-    dl: String,
-    api: String,
-}
-
-async fn get_config_json() -> (StatusCode, Json<Config>) {
-    let domain_name = std::env::var("DOMAIN_NAME").unwrap();
-    let dl = format!("https://{}/api/v1/crates", domain_name);
-    let api = format!("https://{}", domain_name);
-    let response = Config { dl, api };
-
-    (StatusCode::OK, Json(response))
-}
 
 #[tokio::main]
 async fn main() {

@@ -1,3 +1,4 @@
+mod config;
 mod download;
 mod index;
 mod publish;
@@ -6,6 +7,7 @@ mod yank;
 
 use axum::routing::{delete, get, put, Router};
 
+use crate::api::config::get_config_json;
 use crate::api::download::download_crate;
 use crate::api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
@@ -14,7 +16,6 @@ use crate::api::publish::publish_crate;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
 use crate::app_state::AppState;
-use crate::get_config_json;
 use crate::repository::Repository;
 use crate::storage::CrateStorage;
 
