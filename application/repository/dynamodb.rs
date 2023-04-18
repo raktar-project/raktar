@@ -1,14 +1,18 @@
 use anyhow::anyhow;
 use aws_sdk_dynamodb::operation::put_item::PutItemError;
 use aws_sdk_dynamodb::operation::update_item::UpdateItemError;
-use aws_sdk_dynamodb::types::AttributeValue;
+use aws_sdk_dynamodb::types::{AttributeValue, ReturnValue};
 use aws_sdk_dynamodb::Client;
 use semver::Version;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
+use serde_dynamo::from_item;
+use thiserror::__private::AsDynError;
 use tracing::{error, info};
 
-use crate::error::{AppError, AppResult};
+use crate::error::{internal_error, AppError, AppResult};
+use crate::models::crate_info::CrateInfo;
 use crate::models::index::PackageInfo;
+use crate::models::user::User;
 use crate::repository::Repository;
 
 #[derive(Clone)]
@@ -31,6 +35,10 @@ impl DynamoDBRepository {
 
     fn get_package_version_key(version: &Version) -> AttributeValue {
         AttributeValue::S(format!("V#{}", version))
+    }
+
+    fn get_crate_info_key() -> AttributeValue {
+        AttributeValue::S("INFO".to_string())
     }
 }
 
@@ -147,5 +155,64 @@ impl Repository for DynamoDBRepository {
             })?;
 
         Ok(())
+    }
+
+    async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>> {
+        match self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", DynamoDBRepository::get_package_key(crate_name))
+            .key("sk", DynamoDBRepository::get_crate_info_key())
+            .send()
+            .await
+        {
+            Ok(output) => match output.item {
+                None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
+                Some(item) => {
+                    let crate_info: CrateInfo = from_item(item).map_err(|_| {
+                        error!(crate_name, "failed to parse crate info");
+                        internal_error()
+                    })?;
+                    let users = crate_info
+                        .owners
+                        .into_iter()
+                        .map(|id| User {
+                            // TODO: support login and name
+                            id,
+                            login: "dummy_login".to_string(),
+                            name: None,
+                        })
+                        .collect();
+                    Ok(users)
+                }
+            },
+            Err(e) => {
+                let err = e.as_dyn_error();
+                error!(err, crate_name, "unexpected error in getting crate data");
+                Err(internal_error())
+            }
+        }
+    }
+
+    async fn put_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()> {
+        // TODO: store down the ID instead of the login name
+        // we'll map the ID to login name on the read side
+        match self
+            .db_client
+            .update_item()
+            .table_name(&self.table_name)
+            .key("pk", DynamoDBRepository::get_package_key(crate_name))
+            .key("sk", DynamoDBRepository::get_crate_info_key())
+            .update_expression("ADD #owners = :new_owners")
+            .expression_attribute_names("#owners", "owners".to_string())
+            .expression_attribute_values(":new_owners", AttributeValue::Ss(user_ids))
+            .return_values(ReturnValue::UpdatedOld)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(_err) => Err(anyhow::anyhow!("internal server error").into()),
+        }
     }
 }

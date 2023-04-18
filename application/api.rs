@@ -1,6 +1,7 @@
 mod config;
 mod download;
 mod index;
+mod owners;
 mod publish;
 mod unyank;
 mod yank;
@@ -12,6 +13,7 @@ use crate::api::download::download_crate;
 use crate::api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
+use crate::api::owners::{add_owners, list_owners};
 use crate::api::publish::publish_crate;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
@@ -23,6 +25,10 @@ pub fn build_router<R: Repository, S: CrateStorage>() -> Router<AppState<R, S>> 
     Router::new()
         .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
+        .route(
+            "/api/v1/crates/:crate_name/owners",
+            get(list_owners).put(add_owners),
+        )
         .route("/api/v1/crates/:crate_name/:version/yank", delete(yank))
         .route("/api/v1/crates/:crate_name/:version/unyank", put(unyank))
         .route(

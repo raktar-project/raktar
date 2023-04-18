@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -39,3 +40,7 @@ impl IntoResponse for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+pub fn internal_error() -> AppError {
+    anyhow!("Internal Server Error").into()
+}

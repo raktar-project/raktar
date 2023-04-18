@@ -1,6 +1,8 @@
+use semver::Version;
+
 use crate::error::AppResult;
 use crate::models::index::PackageInfo;
-use semver::Version;
+use crate::models::user::User;
 
 #[async_trait::async_trait]
 pub trait Repository: Clone + Send + Sync + 'static {
@@ -12,4 +14,6 @@ pub trait Repository: Clone + Send + Sync + 'static {
         package_info: PackageInfo,
     ) -> AppResult<()>;
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()>;
+    async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
+    async fn put_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
 }
