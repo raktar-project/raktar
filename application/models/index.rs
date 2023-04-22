@@ -1,3 +1,5 @@
+//! Package information in the format information is supposed to be returned
+//! from the index.
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

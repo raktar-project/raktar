@@ -37,7 +37,7 @@ pub async fn add_owners(
     State((repository, _)): State<AppState>,
     Json(new_owners): Json<AddOwnersBody>,
 ) -> AppResult<Json<AddOwnersResponse>> {
-    repository.put_owners(&crate_name, new_owners.users).await?;
+    repository.add_owners(&crate_name, new_owners.users).await?;
 
     let response = AddOwnersResponse {
         ok: true,

@@ -1,3 +1,4 @@
+//! Metadata in the format `cargo publish` uploads metadata.
 use std::collections::HashMap;
 
 use semver::{Version, VersionReq};

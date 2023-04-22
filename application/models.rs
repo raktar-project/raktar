@@ -1,4 +1,4 @@
-pub mod crate_info;
+pub mod crate_details;
 pub mod index;
 pub mod metadata;
 pub mod user;

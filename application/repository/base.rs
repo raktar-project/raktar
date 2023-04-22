@@ -17,7 +17,7 @@ pub trait Repository {
     ) -> AppResult<()>;
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()>;
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
-    async fn put_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
+    async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
 }
 
 pub type DynRepository = Arc<dyn Repository + Send + Sync>;

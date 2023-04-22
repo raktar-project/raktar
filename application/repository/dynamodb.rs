@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 use aws_sdk_dynamodb::operation::put_item::PutItemError;
+use aws_sdk_dynamodb::operation::transact_write_items::TransactWriteItemsError;
 use aws_sdk_dynamodb::operation::update_item::UpdateItemError;
-use aws_sdk_dynamodb::types::{AttributeValue, ReturnValue};
+use aws_sdk_dynamodb::types::{AttributeValue, Put, ReturnValue, TransactWriteItem};
 use aws_sdk_dynamodb::Client;
 use semver::Version;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
@@ -10,7 +11,7 @@ use thiserror::__private::AsDynError;
 use tracing::{error, info};
 
 use crate::error::{internal_error, AppError, AppResult};
-use crate::models::crate_info::CrateInfo;
+use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
 use crate::models::user::User;
 use crate::repository::Repository;
@@ -38,47 +39,97 @@ impl DynamoDBRepository {
     }
 
     fn get_crate_info_key() -> AttributeValue {
-        AttributeValue::S("INFO".to_string())
+        AttributeValue::S("DETAILS".to_string())
     }
-}
 
-#[async_trait::async_trait]
-impl Repository for DynamoDBRepository {
-    async fn get_package_info(&self, crate_name: &str) -> AppResult<String> {
-        let result = self
+    async fn get_crate_details(&self, crate_name: &str) -> AppResult<Option<CrateDetails>> {
+        let res = self
             .db_client
-            .query()
+            .get_item()
             .table_name(&self.table_name)
-            .key_condition_expression("pk = :pk")
-            .expression_attribute_values(":pk", DynamoDBRepository::get_package_key(crate_name))
+            .key("pk", DynamoDBRepository::get_package_key(crate_name))
+            .key("sk", DynamoDBRepository::get_crate_info_key())
             .send()
             .await
-            .map_err(|err| {
-                let error = format!("{:?}", err.into_service_error());
-                error!(error, crate_name, "failed to query package info");
-                anyhow!("internal server error")
+            .map_err(|e| {
+                let err = e.as_dyn_error();
+                error!(err, crate_name, "unexpected error in getting crate details");
+                internal_error()
             })?;
 
-        match result.items() {
-            None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
-            Some(items) => {
-                let infos = from_items::<PackageInfo>(items.to_vec()).map_err(|_| {
-                    error!(
-                        crate_name,
-                        "failed to parse DynamoDB package info items for crate"
-                    );
-                    anyhow!("internal server error")
-                })?;
-                Ok(infos
-                    .into_iter()
-                    .map(|info| serde_json::to_string(&info).unwrap())
-                    .collect::<Vec<_>>()
-                    .join("\n"))
+        let details = if let Some(item) = res.item {
+            let crate_info: CrateDetails = from_item(item).map_err(|_| {
+                error!(crate_name, "failed to parse crate info");
+                internal_error()
+            })?;
+
+            Some(crate_info)
+        } else {
+            None
+        };
+
+        Ok(details)
+    }
+
+    async fn put_new_package(
+        &self,
+        crate_name: &str,
+        version: &Version,
+        package_info: PackageInfo,
+    ) -> AppResult<()> {
+        let details = CrateDetails {
+            // TODO: this should be the user's ID once auth is in place
+            owners: vec![0],
+        };
+        let item = to_item(details).unwrap();
+        let put_item = Put::builder()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .item("pk", DynamoDBRepository::get_package_key(crate_name))
+            .item("sk", DynamoDBRepository::get_crate_info_key())
+            .condition_expression("attribute_not_exists(sk)")
+            .build();
+        let put_details_item = TransactWriteItem::builder().put(put_item).build();
+
+        // TODO: fix unwrap
+        let pk = DynamoDBRepository::get_package_key(&package_info.name);
+        let sk = DynamoDBRepository::get_package_version_key(&package_info.vers);
+        let item = to_item(package_info).unwrap();
+        let put = Put::builder()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .item("pk", pk)
+            .item("sk", sk)
+            .build();
+        let put_item = TransactWriteItem::builder().put(put).build();
+
+        match self
+            .db_client
+            .transact_write_items()
+            .transact_items(put_details_item)
+            .transact_items(put_item)
+            .send()
+            .await
+        {
+            Ok(_) => {
+                info!(
+                    crate_name = crate_name,
+                    version = version.to_string(),
+                    "persisted package info"
+                );
+                Ok(())
             }
+            Err(e) => Err(match e.into_service_error() {
+                TransactWriteItemsError::TransactionCanceledException(_) => {
+                    // TODO: how should we handle this? retry? fail?
+                    anyhow::anyhow!("write conflict on new crate").into()
+                }
+                _ => anyhow::anyhow!("unexpected error in persisting crate").into(),
+            }),
         }
     }
 
-    async fn store_package_info(
+    async fn put_new_package_version(
         &self,
         crate_name: &str,
         version: &Version,
@@ -125,6 +176,64 @@ impl Repository for DynamoDBRepository {
             }
         }
     }
+}
+
+#[async_trait::async_trait]
+impl Repository for DynamoDBRepository {
+    async fn get_package_info(&self, crate_name: &str) -> AppResult<String> {
+        let result = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk and begins_with(sk, :prefix)")
+            .expression_attribute_values(":pk", DynamoDBRepository::get_package_key(crate_name))
+            .expression_attribute_values(":prefix", AttributeValue::S("V#".to_string()))
+            .send()
+            .await
+            .map_err(|err| {
+                let error = format!("{:?}", err.into_service_error());
+                error!(error, crate_name, "failed to query package info");
+                anyhow!("internal server error")
+            })?;
+
+        match result.items() {
+            None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
+            Some(items) => {
+                let infos = from_items::<PackageInfo>(items.to_vec()).map_err(|_| {
+                    error!(
+                        crate_name,
+                        "failed to parse DynamoDB package info items for crate"
+                    );
+                    anyhow!("internal server error")
+                })?;
+                Ok(infos
+                    .into_iter()
+                    .map(|info| serde_json::to_string(&info).unwrap())
+                    .collect::<Vec<_>>()
+                    .join("\n"))
+            }
+        }
+    }
+
+    async fn store_package_info(
+        &self,
+        crate_name: &str,
+        version: &Version,
+        package_info: PackageInfo,
+    ) -> AppResult<()> {
+        match self.get_crate_details(crate_name).await? {
+            // the crate does not exist yet, write the crate details and the new version at once
+            None => {
+                self.put_new_package(crate_name, version, package_info)
+                    .await
+            }
+            // crate details already exist, write the new version
+            Some(_) => {
+                self.put_new_package_version(crate_name, version, package_info)
+                    .await
+            }
+        }
+    }
 
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()> {
         let pk = DynamoDBRepository::get_package_key(crate_name);
@@ -158,46 +267,25 @@ impl Repository for DynamoDBRepository {
     }
 
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>> {
-        match self
-            .db_client
-            .get_item()
-            .table_name(&self.table_name)
-            .key("pk", DynamoDBRepository::get_package_key(crate_name))
-            .key("sk", DynamoDBRepository::get_crate_info_key())
-            .send()
-            .await
-        {
-            Ok(output) => match output.item {
-                None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
-                Some(item) => {
-                    let crate_info: CrateInfo = from_item(item).map_err(|_| {
-                        error!(crate_name, "failed to parse crate info");
-                        internal_error()
-                    })?;
-                    let users = crate_info
-                        .owners
-                        .into_iter()
-                        .map(|id| User {
-                            // TODO: support login and name
-                            id,
-                            login: "dummy_login".to_string(),
-                            name: None,
-                        })
-                        .collect();
-                    Ok(users)
-                }
-            },
-            Err(e) => {
-                let err = e.as_dyn_error();
-                error!(err, crate_name, "unexpected error in getting crate data");
-                Err(internal_error())
+        match self.get_crate_details(crate_name).await? {
+            None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
+            Some(crate_details) => {
+                let users = crate_details
+                    .owners
+                    .into_iter()
+                    .map(|id| User {
+                        // TODO: map login properly
+                        id,
+                        login: "dummy".to_string(),
+                        name: None,
+                    })
+                    .collect();
+                Ok(users)
             }
         }
     }
 
-    async fn put_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()> {
-        // TODO: store down the ID instead of the login name
-        // we'll map the ID to login name on the read side
+    async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()> {
         match self
             .db_client
             .update_item()
