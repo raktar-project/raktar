@@ -2,22 +2,20 @@ use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::app_state::AppState;
 use crate::error::AppResult;
 use crate::models::user::User;
-use crate::repository::Repository;
-use crate::storage::CrateStorage;
+use crate::AppState;
 
 #[derive(Debug, Serialize)]
 pub struct ListOwnersResponse {
     users: Vec<User>,
 }
 
-pub async fn list_owners<R: Repository, S: CrateStorage>(
+pub async fn list_owners(
     Path(crate_name): Path<String>,
-    State(app_state): State<AppState<R, S>>,
+    State((repository, _)): State<AppState>,
 ) -> AppResult<Json<ListOwnersResponse>> {
-    let users = app_state.repository.list_owners(&crate_name).await?;
+    let users = repository.list_owners(&crate_name).await?;
     let response = ListOwnersResponse { users };
 
     Ok(Json(response))
@@ -34,15 +32,12 @@ pub struct AddOwnersResponse {
     msg: String,
 }
 
-pub async fn add_owners<R: Repository, S: CrateStorage>(
+pub async fn add_owners(
     Path(crate_name): Path<String>,
-    State(app_state): State<AppState<R, S>>,
+    State((repository, _)): State<AppState>,
     Json(new_owners): Json<AddOwnersBody>,
 ) -> AppResult<Json<AddOwnersResponse>> {
-    app_state
-        .repository
-        .put_owners(&crate_name, new_owners.users)
-        .await?;
+    repository.put_owners(&crate_name, new_owners.users).await?;
 
     let response = AddOwnersResponse {
         ok: true,

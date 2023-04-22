@@ -1,5 +1,4 @@
 mod api;
-pub mod app_state;
 pub mod error;
 pub mod models;
 pub mod repository;
@@ -8,11 +7,13 @@ pub mod storage;
 use aws_sdk_dynamodb::Client;
 use axum::Router;
 use lambda_web::run_hyper_on_lambda;
+use std::sync::Arc;
 
 use crate::api::build_router;
-use crate::app_state::AppState;
-use crate::repository::DynamoDBRepository;
-use crate::storage::S3Storage;
+use crate::repository::{DynRepository, DynamoDBRepository};
+use crate::storage::{DynCrateStorage, S3Storage};
+
+pub type AppState = (DynRepository, DynCrateStorage);
 
 #[tokio::main]
 async fn main() {
@@ -20,14 +21,10 @@ async fn main() {
 
     let aws_config = aws_config::from_env().load().await;
     let db_client = Client::new(&aws_config);
-    let repository = DynamoDBRepository::new(db_client);
-    let storage = S3Storage::new().await;
-    let app_state = AppState {
-        repository,
-        storage,
-    };
+    let repository = Arc::new(DynamoDBRepository::new(db_client)) as DynRepository;
+    let storage = Arc::new(S3Storage::new().await) as DynCrateStorage;
 
-    let app = build_router().with_state(app_state);
+    let app = build_router().with_state((repository, storage));
 
     run_app(app).await
 }

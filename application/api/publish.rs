@@ -8,12 +8,10 @@ use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 use tracing::info;
 
-use crate::app_state::AppState;
 use crate::error::AppResult;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
-use crate::repository::Repository;
-use crate::storage::CrateStorage;
+use crate::AppState;
 
 #[derive(Serialize)]
 pub struct PublishResponse {
@@ -22,8 +20,8 @@ pub struct PublishResponse {
     other: Vec<String>,
 }
 
-pub async fn publish_crate<R: Repository, S: CrateStorage>(
-    State(app_state): State<AppState<R, S>>,
+pub async fn publish_crate(
+    State((repository, storage)): State<AppState>,
     body: Bytes,
 ) -> AppResult<Json<PublishResponse>> {
     let (metadata_bytes, crate_bytes) = read_body(body);
@@ -35,14 +33,10 @@ pub async fn publish_crate<R: Repository, S: CrateStorage>(
     let checksum: String = Sha256::digest(&crate_bytes).encode_hex();
     let package_info = PackageInfo::from_metadata(metadata, &checksum);
 
-    app_state
-        .repository
+    repository
         .store_package_info(&crate_name, &vers, package_info)
         .await?;
-    app_state
-        .storage
-        .store_crate(&crate_name, vers, crate_bytes)
-        .await?;
+    storage.store_crate(&crate_name, vers, crate_bytes).await?;
 
     Ok(Json(PublishResponse {
         invalid_categories: vec![],

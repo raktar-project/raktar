@@ -17,11 +17,9 @@ use crate::api::owners::{add_owners, list_owners};
 use crate::api::publish::publish_crate;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
-use crate::app_state::AppState;
-use crate::repository::Repository;
-use crate::storage::CrateStorage;
+use crate::AppState;
 
-pub fn build_router<R: Repository, S: CrateStorage>() -> Router<AppState<R, S>> {
+pub fn build_router() -> Router<AppState> {
     Router::new()
         .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
