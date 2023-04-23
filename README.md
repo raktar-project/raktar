@@ -1,11 +1,19 @@
 # Raktar
 
-`raktar` is an alternate registry for Rust leveraging serverless AWS components.
+`raktar` is an alternative registry for Rust leveraging serverless AWS components.
 Its aim is to offer a solution you can deploy in your AWS environment with a
 few simple commands using AWS CDK.
 
+It supports the new [sparse registry](https://blog.rust-lang.org/2022/06/22/sparse-registry-testing.html)
+protocol. `git` based registry support is not planned.
+
+There is no plan to support any currently widespread workaround for authentication.
+The hope is that by the time development on this project is complete, the
+[registry-auth](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#registry-auth)
+flag will be stabilised.
+
 > **Warning**
-> 
+>
 > This application is work in progress. The key APIs work, allowing you to publish crates, query the index, download crates, yank and unyank versions.
 > However, many features and authentication are not implemented yet. Use it at your own risk.
 >
@@ -50,5 +58,5 @@ my-registry = { index = "sparse+https://{domain}/", token = "does-not-matter-for
 ```
 
 > **Note**
-> 
+>
 > `raktar` only support sparse indexes, not the original `git` based indexes.
