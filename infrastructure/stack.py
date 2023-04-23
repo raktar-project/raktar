@@ -1,5 +1,4 @@
 """Stack for Raktar."""
-import aws_cdk.aws_cognito as cognito
 import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_s3 as s3
 from aws_cdk import Environment as CdkEnvironment
@@ -64,11 +63,3 @@ class RaktarStack(Stack):
 
     def create_s3_bucket(self) -> s3.Bucket:
         return s3.Bucket(self, "CratesBucket")
-
-    def create_user_pool(self) -> cognito.UserPool:
-        return cognito.UserPool(
-            self,
-            "UserPool",
-            user_pool_name="raktar-users",
-            self_sign_up_enabled=False,
-        )
