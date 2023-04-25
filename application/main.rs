@@ -20,11 +20,11 @@ pub type AppState = (DynRepository, DynCrateStorage);
 async fn main() {
     tracing_subscriber::fmt().json().init();
 
-    let schema = build_schema();
     let aws_config = aws_config::from_env().load().await;
     let db_client = Client::new(&aws_config);
     let repository = Arc::new(DynamoDBRepository::new(db_client)) as DynRepository;
     let storage = Arc::new(S3Storage::new().await) as DynCrateStorage;
+    let schema = build_schema(repository.clone());
 
     let app = build_router()
         .layer(Extension(schema))

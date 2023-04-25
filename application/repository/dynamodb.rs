@@ -86,6 +86,7 @@ impl DynamoDBRepository {
         package_info: PackageInfo,
     ) -> AppResult<()> {
         let details = CrateDetails {
+            name: crate_name.to_string(),
             // TODO: this should be the user's ID once auth is in place
             owners: vec![0],
         };
@@ -309,5 +310,22 @@ impl Repository for DynamoDBRepository {
             Ok(_) => Ok(()),
             Err(_err) => Err(anyhow::anyhow!("internal server error").into()),
         }
+    }
+
+    async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>> {
+        let result = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk")
+            .expression_attribute_values(":pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        let items = result.items().unwrap_or(&[]);
+        let crates = from_items::<CrateDetails>(items.to_vec()).map_err(|_| internal_error())?;
+
+        Ok(crates)
     }
 }
