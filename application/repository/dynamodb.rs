@@ -7,6 +7,7 @@ use aws_sdk_dynamodb::Client;
 use semver::Version;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
+use std::collections::HashMap;
 use thiserror::__private::AsDynError;
 use tracing::{error, info};
 
@@ -15,6 +16,8 @@ use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
 use crate::models::user::User;
 use crate::repository::Repository;
+
+static CRATES_PARTITION_KEY: &str = "CRATES";
 
 #[derive(Clone)]
 pub struct DynamoDBRepository {
@@ -38,8 +41,14 @@ impl DynamoDBRepository {
         AttributeValue::S(format!("V#{}", version))
     }
 
-    fn get_crate_info_key() -> AttributeValue {
-        AttributeValue::S("DETAILS".to_string())
+    fn get_crate_info_key(&self, crate_name: String) -> Option<HashMap<String, AttributeValue>> {
+        let mut key = HashMap::new();
+        key.insert(
+            "pk".to_string(),
+            AttributeValue::S(CRATES_PARTITION_KEY.to_string()),
+        );
+        key.insert("sk".to_string(), AttributeValue::S(crate_name));
+        Some(key)
     }
 
     async fn get_crate_details(&self, crate_name: &str) -> AppResult<Option<CrateDetails>> {
@@ -47,8 +56,7 @@ impl DynamoDBRepository {
             .db_client
             .get_item()
             .table_name(&self.table_name)
-            .key("pk", DynamoDBRepository::get_package_key(crate_name))
-            .key("sk", DynamoDBRepository::get_crate_info_key())
+            .set_key(self.get_crate_info_key(crate_name.to_string()))
             .send()
             .await
             .map_err(|e| {
@@ -85,8 +93,8 @@ impl DynamoDBRepository {
         let put_item = Put::builder()
             .table_name(&self.table_name)
             .set_item(Some(item))
-            .item("pk", DynamoDBRepository::get_package_key(crate_name))
-            .item("sk", DynamoDBRepository::get_crate_info_key())
+            .item("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+            .item("sk", AttributeValue::S(crate_name.to_string()))
             .condition_expression("attribute_not_exists(sk)")
             .build();
         let put_details_item = TransactWriteItem::builder().put(put_item).build();
@@ -290,8 +298,7 @@ impl Repository for DynamoDBRepository {
             .db_client
             .update_item()
             .table_name(&self.table_name)
-            .key("pk", DynamoDBRepository::get_package_key(crate_name))
-            .key("sk", DynamoDBRepository::get_crate_info_key())
+            .set_key(self.get_crate_info_key(crate_name.to_string()))
             .update_expression("ADD #owners = :new_owners")
             .expression_attribute_names("#owners", "owners".to_string())
             .expression_attribute_values(":new_owners", AttributeValue::Ss(user_ids))
