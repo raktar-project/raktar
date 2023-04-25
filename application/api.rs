@@ -17,10 +17,12 @@ use crate::api::owners::{add_owners, list_owners};
 use crate::api::publish::publish_crate;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
+use crate::graphql::handler::{graphiql, graphql_handler};
 use crate::AppState;
 
 pub fn build_router() -> Router<AppState> {
     Router::new()
+        .route("/gql", get(graphiql).post(graphql_handler))
         .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
         .route(

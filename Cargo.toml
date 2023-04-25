@@ -13,6 +13,8 @@ local = []
 
 [dependencies]
 anyhow = "^1.0.68"
+async-graphql = "^5.0.7"
+async-graphql-axum = "^5.0.7"
 async-trait = "^0.1.68"
 aws-config = "^0.55.0"
 aws-sdk-dynamodb = "^0.25.1"
