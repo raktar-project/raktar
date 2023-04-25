@@ -1,4 +1,5 @@
 mod api;
+pub mod auth;
 pub mod error;
 mod graphql;
 pub mod models;

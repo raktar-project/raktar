@@ -20,6 +20,7 @@ pub trait Repository {
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
     async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
     async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>>;
+    async fn store_auth_token(&self, token: Vec<u8>, name: String) -> AppResult<()>;
 }
 
 pub type DynRepository = Arc<dyn Repository + Send + Sync>;

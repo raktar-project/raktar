@@ -14,6 +14,7 @@ use tracing::{error, info};
 use crate::error::{internal_error, AppError, AppResult};
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
+use crate::models::token::TokenItem;
 use crate::models::user::User;
 use crate::repository::Repository;
 
@@ -327,5 +328,18 @@ impl Repository for DynamoDBRepository {
         let crates = from_items::<CrateDetails>(items.to_vec()).map_err(|_| internal_error())?;
 
         Ok(crates)
+    }
+
+    async fn store_auth_token(&self, token: Vec<u8>, name: String) -> AppResult<()> {
+        let item = to_item(TokenItem::new(token, name)).map_err(|_| internal_error())?;
+        self.db_client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        Ok(())
     }
 }
