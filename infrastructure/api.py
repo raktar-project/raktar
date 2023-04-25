@@ -1,8 +1,9 @@
 """The web API for the registry."""
 import aws_cdk.aws_certificatemanager as acm
+import aws_cdk.aws_cognito as cognito
 import aws_cdk.aws_route53 as route53
 import aws_cdk.aws_route53_targets as route53_targets
-from aws_cdk import CfnOutput
+from aws_cdk import CfnOutput, Stack
 from aws_cdk.aws_apigatewayv2_alpha import (
     CorsHttpMethod,
     CorsPreflightOptions,
@@ -11,6 +12,7 @@ from aws_cdk.aws_apigatewayv2_alpha import (
     HttpApi,
     HttpMethod,
 )
+from aws_cdk.aws_apigatewayv2_authorizers_alpha import HttpJwtAuthorizer
 from aws_cdk.aws_apigatewayv2_integrations_alpha import HttpLambdaIntegration
 from aws_cdk.aws_lambda import Function
 from constructs import Construct
@@ -53,9 +55,16 @@ class WebApi(Construct):
             validation=acm.CertificateValidation.from_dns(hosted_zone),
         )
 
+        user_pool = self.build_user_pool()
+        user_pool_client = self.build_user_pool_client(user_pool)
+        authorizer = self.build_http_authorizer(
+            pool_id=user_pool.user_pool_id,
+            client_id=user_pool_client.user_pool_client_id,
+        )
+
         custom_domain = self.create_custom_domain(settings.domain_name, certificate)
         http_api = self.build_http_api(api_name=api_name, custom_domain=custom_domain)
-        self.setup_lambda_integration(http_api, api_lambda)
+        self.setup_lambda_integration(http_api, api_lambda, authorizer=authorizer)
 
         target = route53_targets.ApiGatewayv2DomainProperties(
             regional_domain_name=custom_domain.regional_domain_name,
@@ -75,6 +84,7 @@ class WebApi(Construct):
     def setup_lambda_integration(
         http_api: HttpApi,
         api_function: Function,
+        authorizer: HttpJwtAuthorizer,
     ) -> None:
         """Set up the handler for Mangum/FastAPI."""
         integration = HttpLambdaIntegration(
@@ -91,6 +101,7 @@ class WebApi(Construct):
                 HttpMethod.DELETE,
             ],
             integration=integration,
+            authorizer=authorizer,
         )
 
     def build_http_api(self, api_name: str, custom_domain: DomainName) -> HttpApi:
@@ -122,4 +133,27 @@ class WebApi(Construct):
             self,
             "HostedZone",
             domain_name=settings.hosted_zone_domain_name,
+        )
+
+    def build_user_pool(self) -> cognito.UserPool:
+        return cognito.UserPool(
+            self,
+            "UserPool",
+            user_pool_name="raktar-users",
+            self_sign_up_enabled=False,
+        )
+
+    def build_user_pool_client(
+        self, user_pool: cognito.UserPool
+    ) -> cognito.UserPoolClient:
+        return cognito.UserPoolClient(self, "CognitoClient", user_pool=user_pool)
+
+    def build_http_authorizer(self, pool_id: str, client_id: str) -> HttpJwtAuthorizer:
+        issuer = f"https://cognito-idp.{Stack.of(self).region}.amazonaws.com/{pool_id}"
+
+        return HttpJwtAuthorizer(
+            "JwtAuthorizer",
+            jwt_issuer=issuer,
+            jwt_audience=[client_id],
+            authorizer_name="CognitoAuthorizer",
         )
