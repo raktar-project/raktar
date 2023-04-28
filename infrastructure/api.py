@@ -92,12 +92,20 @@ class WebApi(Construct):
             handler=api_function,
         )
         http_api.add_routes(
+            path="/gql",
+            methods=[
+                HttpMethod.GET,
+                HttpMethod.POST,
+            ],
+            integration=integration,
+            authorizer=authorizer,
+        )
+        http_api.add_routes(
             path="/{proxy+}",
             methods=[
                 HttpMethod.GET,
                 HttpMethod.POST,
                 HttpMethod.PUT,
-                HttpMethod.PATCH,
                 HttpMethod.DELETE,
             ],
             integration=integration,
