@@ -86,7 +86,7 @@ class WebApi(Construct):
         api_function: Function,
         authorizer: HttpJwtAuthorizer,
     ) -> None:
-        """Set up the handler for Mangum/FastAPI."""
+        """Set up the handler for Axum."""
         integration = HttpLambdaIntegration(
             "LambdaIntegration",
             handler=api_function,

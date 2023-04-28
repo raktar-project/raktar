@@ -5,6 +5,7 @@ use semver::Version;
 use crate::error::AppResult;
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
+use crate::models::token::TokenItem;
 use crate::models::user::User;
 
 #[async_trait::async_trait]
@@ -20,7 +21,8 @@ pub trait Repository {
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
     async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
     async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>>;
-    async fn store_auth_token(&self, token: Vec<u8>, name: String) -> AppResult<()>;
+    async fn store_auth_token(&self, token: &[u8], name: String) -> AppResult<()>;
+    async fn get_auth_token(&self, token: &[u8]) -> AppResult<Option<TokenItem>>;
 }
 
 pub type DynRepository = Arc<dyn Repository + Send + Sync>;

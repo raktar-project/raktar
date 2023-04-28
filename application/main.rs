@@ -7,11 +7,10 @@ pub mod repository;
 pub mod storage;
 
 use aws_sdk_dynamodb::Client;
-use axum::{Extension, Router};
+use axum::Router;
 use std::sync::Arc;
 
 use crate::api::build_router;
-use crate::graphql::schema::build_schema;
 use crate::repository::{DynRepository, DynamoDBRepository};
 use crate::storage::{DynCrateStorage, S3Storage};
 
@@ -25,11 +24,8 @@ async fn main() {
     let db_client = Client::new(&aws_config);
     let repository = Arc::new(DynamoDBRepository::new(db_client)) as DynRepository;
     let storage = Arc::new(S3Storage::new().await) as DynCrateStorage;
-    let schema = build_schema(repository.clone());
 
-    let app = build_router()
-        .layer(Extension(schema))
-        .with_state((repository, storage));
+    let app = build_router(repository, storage);
 
     run_app(app).await
 }

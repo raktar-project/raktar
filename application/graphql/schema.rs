@@ -1,6 +1,6 @@
-use crate::auth::generate_new_token;
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema, SimpleObject};
 
+use crate::auth::generate_new_token;
 use crate::error::internal_error;
 use crate::models::crate_details::CrateDetails;
 use crate::repository::DynRepository;
@@ -47,7 +47,7 @@ impl Mutation {
 
         let generated = generate_new_token();
         repository
-            .store_auth_token(generated.secure_hash, name)
+            .store_auth_token(&generated.secure_hash, name)
             .await?;
         let token = GeneratedToken {
             token: generated.plaintext,
