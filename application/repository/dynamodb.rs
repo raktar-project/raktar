@@ -7,14 +7,18 @@ use aws_sdk_dynamodb::Client;
 use semver::Version;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
+use std::collections::HashMap;
 use thiserror::__private::AsDynError;
 use tracing::{error, info};
 
 use crate::error::{internal_error, AppError, AppResult};
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
+use crate::models::token::TokenItem;
 use crate::models::user::User;
 use crate::repository::Repository;
+
+static CRATES_PARTITION_KEY: &str = "CRATES";
 
 #[derive(Clone)]
 pub struct DynamoDBRepository {
@@ -38,8 +42,14 @@ impl DynamoDBRepository {
         AttributeValue::S(format!("V#{}", version))
     }
 
-    fn get_crate_info_key() -> AttributeValue {
-        AttributeValue::S("DETAILS".to_string())
+    fn get_crate_info_key(&self, crate_name: String) -> Option<HashMap<String, AttributeValue>> {
+        let mut key = HashMap::new();
+        key.insert(
+            "pk".to_string(),
+            AttributeValue::S(CRATES_PARTITION_KEY.to_string()),
+        );
+        key.insert("sk".to_string(), AttributeValue::S(crate_name));
+        Some(key)
     }
 
     async fn get_crate_details(&self, crate_name: &str) -> AppResult<Option<CrateDetails>> {
@@ -47,8 +57,7 @@ impl DynamoDBRepository {
             .db_client
             .get_item()
             .table_name(&self.table_name)
-            .key("pk", DynamoDBRepository::get_package_key(crate_name))
-            .key("sk", DynamoDBRepository::get_crate_info_key())
+            .set_key(self.get_crate_info_key(crate_name.to_string()))
             .send()
             .await
             .map_err(|e| {
@@ -78,6 +87,7 @@ impl DynamoDBRepository {
         package_info: PackageInfo,
     ) -> AppResult<()> {
         let details = CrateDetails {
+            name: crate_name.to_string(),
             // TODO: this should be the user's ID once auth is in place
             owners: vec![0],
         };
@@ -85,8 +95,8 @@ impl DynamoDBRepository {
         let put_item = Put::builder()
             .table_name(&self.table_name)
             .set_item(Some(item))
-            .item("pk", DynamoDBRepository::get_package_key(crate_name))
-            .item("sk", DynamoDBRepository::get_crate_info_key())
+            .item("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+            .item("sk", AttributeValue::S(crate_name.to_string()))
             .condition_expression("attribute_not_exists(sk)")
             .build();
         let put_details_item = TransactWriteItem::builder().put(put_item).build();
@@ -290,8 +300,7 @@ impl Repository for DynamoDBRepository {
             .db_client
             .update_item()
             .table_name(&self.table_name)
-            .key("pk", DynamoDBRepository::get_package_key(crate_name))
-            .key("sk", DynamoDBRepository::get_crate_info_key())
+            .set_key(self.get_crate_info_key(crate_name.to_string()))
             .update_expression("ADD #owners = :new_owners")
             .expression_attribute_names("#owners", "owners".to_string())
             .expression_attribute_values(":new_owners", AttributeValue::Ss(user_ids))
@@ -302,5 +311,59 @@ impl Repository for DynamoDBRepository {
             Ok(_) => Ok(()),
             Err(_err) => Err(anyhow::anyhow!("internal server error").into()),
         }
+    }
+
+    async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>> {
+        let result = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk")
+            .expression_attribute_values(":pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        let items = result.items().unwrap_or(&[]);
+        let crates = from_items::<CrateDetails>(items.to_vec()).map_err(|_| internal_error())?;
+
+        Ok(crates)
+    }
+
+    async fn store_auth_token(&self, token: &[u8], name: String) -> AppResult<()> {
+        let item = to_item(TokenItem::new(token, name)).map_err(|_| internal_error())?;
+        self.db_client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        Ok(())
+    }
+
+    async fn get_auth_token(&self, token: &[u8]) -> AppResult<Option<TokenItem>> {
+        let output = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", AttributeValue::S(TokenItem::get_pk(token)))
+            .key("sk", AttributeValue::S(TokenItem::get_sk()))
+            .send()
+            .await
+            .map_err(|e| {
+                let err = e.to_string();
+                error!(err, "failed to get token");
+                internal_error()
+            })?;
+
+        let token_item = if let Some(item) = output.item().cloned() {
+            Some(from_item(item).map_err(|_| internal_error())?)
+        } else {
+            None
+        };
+
+        Ok(token_item)
     }
 }

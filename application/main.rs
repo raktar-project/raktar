@@ -1,12 +1,13 @@
 mod api;
+pub mod auth;
 pub mod error;
+mod graphql;
 pub mod models;
 pub mod repository;
 pub mod storage;
 
 use aws_sdk_dynamodb::Client;
 use axum::Router;
-use lambda_web::run_hyper_on_lambda;
 use std::sync::Arc;
 
 use crate::api::build_router;
@@ -24,14 +25,14 @@ async fn main() {
     let repository = Arc::new(DynamoDBRepository::new(db_client)) as DynRepository;
     let storage = Arc::new(S3Storage::new().await) as DynCrateStorage;
 
-    let app = build_router().with_state((repository, storage));
+    let app = build_router(repository, storage);
 
     run_app(app).await
 }
 
 #[cfg(feature = "local")]
 async fn run_app(app: Router) {
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3025));
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3026));
     tracing::info!("listening on http://{}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -41,7 +42,7 @@ async fn run_app(app: Router) {
 
 #[cfg(not(feature = "local"))]
 async fn run_app(app: Router) {
-    run_hyper_on_lambda(app)
+    lambda_web::run_hyper_on_lambda(app)
         .await
         .expect("app to run on Lambda successfully")
 }

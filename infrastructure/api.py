@@ -86,10 +86,19 @@ class WebApi(Construct):
         api_function: Function,
         authorizer: HttpJwtAuthorizer,
     ) -> None:
-        """Set up the handler for Mangum/FastAPI."""
+        """Set up the handler for Axum."""
         integration = HttpLambdaIntegration(
             "LambdaIntegration",
             handler=api_function,
+        )
+        http_api.add_routes(
+            path="/gql",
+            methods=[
+                HttpMethod.GET,
+                HttpMethod.POST,
+            ],
+            integration=integration,
+            authorizer=authorizer,
         )
         http_api.add_routes(
             path="/{proxy+}",
@@ -97,11 +106,10 @@ class WebApi(Construct):
                 HttpMethod.GET,
                 HttpMethod.POST,
                 HttpMethod.PUT,
-                HttpMethod.PATCH,
                 HttpMethod.DELETE,
             ],
             integration=integration,
-            authorizer=authorizer,
+            # authorizer=authorizer,
         )
 
     def build_http_api(self, api_name: str, custom_domain: DomainName) -> HttpApi:

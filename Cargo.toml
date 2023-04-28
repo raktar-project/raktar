@@ -13,14 +13,18 @@ local = []
 
 [dependencies]
 anyhow = "^1.0.68"
+async-graphql = "^5.0.7"
+async-graphql-axum = "^5.0.7"
 async-trait = "^0.1.68"
 aws-config = "^0.55.0"
 aws-sdk-dynamodb = "^0.25.1"
 aws-sdk-s3 = "^0.25.0"
 axum = "^0.6.12"
+base64 = "0.21.0"
 byteorder = "^1.4.3"
 hex = "0.4.3"
 lambda-web = { version = "^0.2.1", features = ["hyper"] }
+rand = "0.8.5"
 semver = { version = "^1.0.17", features = ["serde"] }
 serde = { version = "^1.0.159", features = ["derive"] }
 serde_dynamo = { version = "^4.2.0", features = ["aws-sdk-dynamodb+0_25"] }
