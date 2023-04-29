@@ -4,9 +4,17 @@ version = "0.1.0"
 edition = "2021"
 license-file = "LICENSE"
 
+[lib]
+name = "raktar"
+path = "application/lib.rs"
+
 [[bin]]
 name = "raktar-handler"
 path = "application/main.rs"
+
+[[bin]]
+name = "raktar-pre-token-handler"
+path = "application/pre_token_handler.rs"
 
 [features]
 local = []
@@ -25,6 +33,7 @@ byteorder = "^1.4.3"
 hex = "0.4.3"
 http = "0.2.9"
 lambda-web = { version = "^0.2.1", features = ["hyper"] }
+lambda_runtime = "^0.7"
 rand = "0.8.5"
 semver = { version = "^1.0.17", features = ["serde"] }
 serde = { version = "^1.0.159", features = ["derive"] }

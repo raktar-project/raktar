@@ -27,7 +27,7 @@ pub struct DynamoDBRepository {
 }
 
 impl DynamoDBRepository {
-    pub(crate) fn new(db_client: Client) -> Self {
+    pub fn new(db_client: Client) -> Self {
         Self {
             db_client,
             table_name: std::env::var("TABLE_NAME").unwrap(),
@@ -185,6 +185,14 @@ impl DynamoDBRepository {
                 Err(err)
             }
         }
+    }
+
+    async fn create_next_user(&self, login: &str) -> AppResult<User> {
+        Ok(User {
+            id: 0,
+            login: login.to_string(),
+            name: None,
+        })
     }
 }
 
@@ -365,5 +373,33 @@ impl Repository for DynamoDBRepository {
         };
 
         Ok(token_item)
+    }
+
+    async fn get_or_create_user(&self, login: &str) -> AppResult<User> {
+        #[derive(Debug, serde::Deserialize)]
+        struct LoginNameMapping {
+            user_id: u32,
+        }
+
+        let output = self
+            .db_client
+            .get_item()
+            .key("pk", AttributeValue::S("USERS".to_string()))
+            .key("sk", AttributeValue::S(format!("USERNAME#{}", login)))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        match output.item().cloned() {
+            None => self.create_next_user(login).await,
+            Some(item) => {
+                let mapping: LoginNameMapping = from_item(item).map_err(|_| internal_error())?;
+                Ok(User {
+                    id: mapping.user_id,
+                    login: login.to_string(),
+                    name: None,
+                })
+            }
+        }
     }
 }

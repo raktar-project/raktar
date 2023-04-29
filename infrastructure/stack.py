@@ -8,6 +8,7 @@ from constructs import Construct
 from infrastructure.api import WebApi
 from infrastructure.rust_function import RustFunction
 from infrastructure.settings import Settings
+from infrastructure.user_pool import RaktarUserPool
 
 
 class RaktarStack(Stack):
@@ -37,6 +38,21 @@ class RaktarStack(Stack):
                 "DOMAIN_NAME": settings.domain_name,
             },
         )
+        pre_token_function = RustFunction(
+            self,
+            "RaktarPreTokenFunction",
+            bin_name="raktar-pre-token-handler",
+            description="Lambda function for the Raktar Cognito user pool.",
+            environment_variables={
+                "TABLE_NAME": table.table_name,
+            },
+        )
+        user_pool = RaktarUserPool(
+            self,
+            "RaktarUserPool",
+            pre_token_trigger_function=pre_token_function.function,
+            sso_metadata_url=settings.sso_metadata_url,
+        )
         table.grant_read_write_data(backend_function.function)
         bucket.grant_read_write(backend_function.function)
 
@@ -46,6 +62,7 @@ class RaktarStack(Stack):
             api_name="raktar-web",
             api_lambda=backend_function.function,
             settings=settings,
+            user_pool=user_pool,
         )
 
     def create_database_table(self) -> dynamodb.Table:

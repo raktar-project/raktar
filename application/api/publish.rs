@@ -8,10 +8,10 @@ use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 use tracing::info;
 
-use crate::error::AppResult;
-use crate::models::index::PackageInfo;
-use crate::models::metadata::Metadata;
 use crate::AppState;
+use raktar::error::AppResult;
+use raktar::models::index::PackageInfo;
+use raktar::models::metadata::Metadata;
 
 #[derive(Serialize)]
 pub struct PublishResponse {

@@ -1,9 +1,9 @@
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema, SimpleObject};
 
-use crate::auth::generate_new_token;
-use crate::error::internal_error;
-use crate::models::crate_details::CrateDetails;
-use crate::repository::DynRepository;
+use raktar::auth::generate_new_token;
+use raktar::error::internal_error;
+use raktar::models::crate_details::CrateDetails;
+use raktar::repository::DynRepository;
 
 pub struct Query;
 

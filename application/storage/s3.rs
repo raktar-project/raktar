@@ -3,8 +3,8 @@ use aws_sdk_s3::operation::get_object::GetObjectError;
 use aws_sdk_s3::Client;
 use semver::Version;
 
-use crate::error::{AppError, AppResult};
 use crate::storage::CrateStorage;
+use raktar::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct S3Storage {

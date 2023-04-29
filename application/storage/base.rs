@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use semver::Version;
 
-use crate::error::AppResult;
+use raktar::error::AppResult;
 
 #[async_trait::async_trait]
 pub trait CrateStorage {

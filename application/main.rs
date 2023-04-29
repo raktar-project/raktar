@@ -1,17 +1,14 @@
 mod api;
-pub mod auth;
-pub mod error;
 mod graphql;
-pub mod models;
-pub mod repository;
 pub mod storage;
+
+use std::sync::Arc;
 
 use aws_sdk_dynamodb::Client;
 use axum::Router;
-use std::sync::Arc;
+use raktar::repository::{DynRepository, DynamoDBRepository};
 
 use crate::api::build_router;
-use crate::repository::{DynRepository, DynamoDBRepository};
 use crate::storage::{DynCrateStorage, S3Storage};
 
 pub type AppState = (DynRepository, DynCrateStorage);

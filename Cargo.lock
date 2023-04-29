@@ -1557,6 +1557,7 @@ dependencies = [
  "hex",
  "http",
  "lambda-web",
+ "lambda_runtime",
  "rand",
  "semver",
  "serde",
