@@ -109,7 +109,6 @@ class WebApi(Construct):
                 HttpMethod.DELETE,
             ],
             integration=integration,
-            # authorizer=authorizer,
         )
 
     def build_http_api(self, api_name: str, custom_domain: DomainName) -> HttpApi:
