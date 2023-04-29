@@ -1,7 +1,10 @@
+use aws_sdk_dynamodb::Client;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{error, info, Level};
+
+use raktar::repository::{DynamoDBRepository, Repository};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -16,6 +19,12 @@ async fn main() -> Result<(), Error> {
 
 async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     let (event, _context) = event.into_parts();
+
+    // TODO: these should be cached between invocations
+    let aws_config = aws_config::from_env().load().await;
+    let db_client = Client::new(&aws_config);
+    let repository = DynamoDBRepository::new(db_client);
+
     info!("pre-token triggered: {}", event);
     match serde_json::from_value::<TriggerEvent>(event.clone()) {
         Ok(trigger_event) => {
@@ -24,7 +33,14 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
                 Ok(identities) => match identities.get(0) {
                     Some(identity) => {
                         let user_id = &identity.user_id;
-                        info!(user_id, "adding extra claims for user");
+                        match repository.get_or_create_user(user_id).await {
+                            Ok(_) => {
+                                info!(user_id, "adding extra claims for user");
+                            }
+                            Err(err) => {
+                                error!("failed to get user: {}", err);
+                            }
+                        };
                     }
                     None => {
                         error!("missing identity in trigger event");

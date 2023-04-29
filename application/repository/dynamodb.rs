@@ -8,6 +8,7 @@ use semver::Version;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
 use std::collections::HashMap;
+use std::str::FromStr;
 use thiserror::__private::AsDynError;
 use tracing::{error, info};
 
@@ -188,11 +189,42 @@ impl DynamoDBRepository {
     }
 
     async fn create_next_user(&self, login: &str) -> AppResult<User> {
+        let next_id = self.find_next_user_id().await?;
+
+        info!("next available ID is {}", next_id);
+
         Ok(User {
             id: 0,
             login: login.to_string(),
             name: None,
         })
+    }
+
+    async fn find_next_user_id(&self) -> AppResult<u32> {
+        let output = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S("USERS".to_string()))
+            .expression_attribute_values(":prefix", AttributeValue::S("USERNAME#".to_string()))
+            .scan_index_forward(false)
+            .send()
+            .await
+            .map_err(|err| {
+                error!("failed to query users: {:?}", err.into_service_error());
+                internal_error()
+            })?;
+
+        let next_id = output
+            .items()
+            .and_then(|items| items.iter().next())
+            .and_then(|item| item.get("id"))
+            .and_then(|attr| attr.as_n().ok())
+            .and_then(|id_string| u32::from_str(id_string).ok())
+            .unwrap_or(0);
+
+        Ok(next_id)
     }
 }
 
@@ -381,17 +413,28 @@ impl Repository for DynamoDBRepository {
             user_id: u32,
         }
 
-        let output = self
+        let output = match self
             .db_client
             .get_item()
+            .table_name(&self.table_name)
             .key("pk", AttributeValue::S("USERS".to_string()))
             .key("sk", AttributeValue::S(format!("USERNAME#{}", login)))
             .send()
             .await
-            .map_err(|_| internal_error())?;
+        {
+            Ok(output) => output,
+            Err(err) => {
+                let error_message = err.into_service_error();
+                error!("failed to get user: {:?}", error_message);
+                return Err(internal_error());
+            }
+        };
 
         match output.item().cloned() {
-            None => self.create_next_user(login).await,
+            None => {
+                info!("user not found, creating new user");
+                self.create_next_user(login).await
+            }
             Some(item) => {
                 let mapping: LoginNameMapping = from_item(item).map_err(|_| internal_error())?;
                 Ok(User {

@@ -54,6 +54,7 @@ class RaktarStack(Stack):
             sso_metadata_url=settings.sso_metadata_url,
         )
         table.grant_read_write_data(backend_function.function)
+        table.grant_read_write_data(pre_token_function.function)
         bucket.grant_read_write(backend_function.function)
 
         WebApi(
