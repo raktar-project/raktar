@@ -190,14 +190,45 @@ impl DynamoDBRepository {
 
     async fn create_next_user(&self, login: &str) -> AppResult<User> {
         let next_id = self.find_next_user_id().await?;
-
         info!("next available ID is {}", next_id);
 
-        Ok(User {
-            id: 0,
-            login: login.to_string(),
-            name: None,
-        })
+        self.put_new_user(login, next_id).await
+    }
+
+    async fn put_new_user(&self, login: &str, user_id: u32) -> AppResult<User> {
+        let put = Put::builder()
+            .table_name(&self.table_name)
+            .item("pk", AttributeValue::S("USERS".to_string()))
+            .item("sk", AttributeValue::S(format!("LOGIN#{}", login)))
+            .item("id", AttributeValue::N(user_id.to_string()))
+            .build();
+        let put_login_mapping_item = TransactWriteItem::builder().put(put).build();
+
+        let user_id_sk = AttributeValue::S(format!("ID#{:06}", user_id));
+        let put = Put::builder()
+            .table_name(&self.table_name)
+            .item("pk", AttributeValue::S("USERS".to_string()))
+            .item("sk", user_id_sk)
+            .item("id", AttributeValue::N(user_id.to_string()))
+            .item("login", AttributeValue::S(login.to_string()))
+            .build();
+        let put_user_item = TransactWriteItem::builder().put(put).build();
+
+        self.db_client
+            .transact_write_items()
+            .transact_items(put_login_mapping_item)
+            .transact_items(put_user_item)
+            .send()
+            .await
+            .map(|_| User {
+                login: login.to_string(),
+                id: user_id,
+                name: None,
+            })
+            .map_err(|err| {
+                error!("failed to persist new user: {:?}", err.into_service_error());
+                internal_error()
+            })
     }
 
     async fn find_next_user_id(&self) -> AppResult<u32> {
@@ -207,7 +238,7 @@ impl DynamoDBRepository {
             .table_name(&self.table_name)
             .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
             .expression_attribute_values(":pk", AttributeValue::S("USERS".to_string()))
-            .expression_attribute_values(":prefix", AttributeValue::S("USERNAME#".to_string()))
+            .expression_attribute_values(":prefix", AttributeValue::S("ID#".to_string()))
             .scan_index_forward(false)
             .send()
             .await
@@ -216,7 +247,8 @@ impl DynamoDBRepository {
                 internal_error()
             })?;
 
-        let next_id = output
+        // TODO: review this, it's not safe to silently swallow all these
+        let current_id = output
             .items()
             .and_then(|items| items.iter().next())
             .and_then(|item| item.get("id"))
@@ -224,7 +256,7 @@ impl DynamoDBRepository {
             .and_then(|id_string| u32::from_str(id_string).ok())
             .unwrap_or(0);
 
-        Ok(next_id)
+        Ok(current_id + 1)
     }
 }
 
@@ -418,7 +450,7 @@ impl Repository for DynamoDBRepository {
             .get_item()
             .table_name(&self.table_name)
             .key("pk", AttributeValue::S("USERS".to_string()))
-            .key("sk", AttributeValue::S(format!("USERNAME#{}", login)))
+            .key("sk", AttributeValue::S(format!("LOGIN#{}", login)))
             .send()
             .await
         {
