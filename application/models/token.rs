@@ -11,12 +11,12 @@ pub struct TokenItem {
 }
 
 impl TokenItem {
-    pub fn new(token: &[u8], name: String) -> Self {
+    pub fn new(token: &[u8], name: String, user_id: u32) -> Self {
         Self {
             pk: Self::get_pk(token),
             sk: Self::get_sk(),
             name,
-            user: 0,
+            user: user_id,
         }
     }
 

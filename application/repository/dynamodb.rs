@@ -402,8 +402,8 @@ impl Repository for DynamoDBRepository {
         Ok(crates)
     }
 
-    async fn store_auth_token(&self, token: &[u8], name: String) -> AppResult<()> {
-        let item = to_item(TokenItem::new(token, name)).map_err(|_| internal_error())?;
+    async fn store_auth_token(&self, token: &[u8], name: String, user_id: u32) -> AppResult<()> {
+        let item = to_item(TokenItem::new(token, name, user_id)).map_err(|_| internal_error())?;
         self.db_client
             .put_item()
             .table_name(&self.table_name)
