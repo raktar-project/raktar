@@ -5,8 +5,8 @@ use axum::Json;
 use semver::Version;
 use serde::Serialize;
 
-use crate::error::AppResult;
 use crate::AppState;
+use raktar::error::AppResult;
 
 #[derive(Serialize)]
 pub struct Response {

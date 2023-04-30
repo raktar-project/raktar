@@ -1,7 +1,7 @@
 use axum::extract::{Path, State};
 
-use crate::error::AppResult;
 use crate::AppState;
+use raktar::error::AppResult;
 
 pub async fn get_info_for_short_name_crate(
     Path(crate_name): Path<String>,

@@ -8,6 +8,7 @@ use semver::Version;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
 use std::collections::HashMap;
+use std::str::FromStr;
 use thiserror::__private::AsDynError;
 use tracing::{error, info};
 
@@ -27,7 +28,7 @@ pub struct DynamoDBRepository {
 }
 
 impl DynamoDBRepository {
-    pub(crate) fn new(db_client: Client) -> Self {
+    pub fn new(db_client: Client) -> Self {
         Self {
             db_client,
             table_name: std::env::var("TABLE_NAME").unwrap(),
@@ -185,6 +186,77 @@ impl DynamoDBRepository {
                 Err(err)
             }
         }
+    }
+
+    async fn create_next_user(&self, login: &str) -> AppResult<User> {
+        let next_id = self.find_next_user_id().await?;
+        info!("next available ID is {}", next_id);
+
+        self.put_new_user(login, next_id).await
+    }
+
+    async fn put_new_user(&self, login: &str, user_id: u32) -> AppResult<User> {
+        let put = Put::builder()
+            .table_name(&self.table_name)
+            .item("pk", AttributeValue::S("USERS".to_string()))
+            .item("sk", AttributeValue::S(format!("LOGIN#{}", login)))
+            .item("id", AttributeValue::N(user_id.to_string()))
+            .build();
+        let put_login_mapping_item = TransactWriteItem::builder().put(put).build();
+
+        let user_id_sk = AttributeValue::S(format!("ID#{:06}", user_id));
+        let put = Put::builder()
+            .table_name(&self.table_name)
+            .item("pk", AttributeValue::S("USERS".to_string()))
+            .item("sk", user_id_sk)
+            .item("id", AttributeValue::N(user_id.to_string()))
+            .item("login", AttributeValue::S(login.to_string()))
+            .build();
+        let put_user_item = TransactWriteItem::builder().put(put).build();
+
+        self.db_client
+            .transact_write_items()
+            .transact_items(put_login_mapping_item)
+            .transact_items(put_user_item)
+            .send()
+            .await
+            .map(|_| User {
+                login: login.to_string(),
+                id: user_id,
+                name: None,
+            })
+            .map_err(|err| {
+                error!("failed to persist new user: {:?}", err.into_service_error());
+                internal_error()
+            })
+    }
+
+    async fn find_next_user_id(&self) -> AppResult<u32> {
+        let output = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S("USERS".to_string()))
+            .expression_attribute_values(":prefix", AttributeValue::S("ID#".to_string()))
+            .scan_index_forward(false)
+            .send()
+            .await
+            .map_err(|err| {
+                error!("failed to query users: {:?}", err.into_service_error());
+                internal_error()
+            })?;
+
+        // TODO: review this, it's not safe to silently swallow all these
+        let current_id = output
+            .items()
+            .and_then(|items| items.iter().next())
+            .and_then(|item| item.get("id"))
+            .and_then(|attr| attr.as_n().ok())
+            .and_then(|id_string| u32::from_str(id_string).ok())
+            .unwrap_or(0);
+
+        Ok(current_id + 1)
     }
 }
 
@@ -365,5 +437,44 @@ impl Repository for DynamoDBRepository {
         };
 
         Ok(token_item)
+    }
+
+    async fn get_or_create_user(&self, login: &str) -> AppResult<User> {
+        #[derive(Debug, serde::Deserialize)]
+        struct LoginNameMapping {
+            id: u32,
+        }
+
+        let output = match self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", AttributeValue::S("USERS".to_string()))
+            .key("sk", AttributeValue::S(format!("LOGIN#{}", login)))
+            .send()
+            .await
+        {
+            Ok(output) => output,
+            Err(err) => {
+                let error_message = err.into_service_error();
+                error!("failed to get user: {:?}", error_message);
+                return Err(internal_error());
+            }
+        };
+
+        match output.item().cloned() {
+            None => {
+                info!("user not found, creating new user");
+                self.create_next_user(login).await
+            }
+            Some(item) => {
+                let mapping: LoginNameMapping = from_item(item).map_err(|_| internal_error())?;
+                Ok(User {
+                    id: mapping.id,
+                    login: login.to_string(),
+                    name: None,
+                })
+            }
+        }
     }
 }

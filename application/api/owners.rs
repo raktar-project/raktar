@@ -2,9 +2,9 @@ use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::error::AppResult;
-use crate::models::user::User;
 use crate::AppState;
+use raktar::error::AppResult;
+use raktar::models::user::User;
 
 #[derive(Debug, Serialize)]
 pub struct ListOwnersResponse {
