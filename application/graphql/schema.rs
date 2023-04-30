@@ -1,5 +1,7 @@
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema, SimpleObject};
+use tracing::info;
 
+use crate::graphql::handler::AuthenticatedUser;
 use raktar::auth::generate_new_token;
 use raktar::error::internal_error;
 use raktar::models::crate_details::CrateDetails;
@@ -43,6 +45,8 @@ pub struct Mutation;
 #[Object]
 impl Mutation {
     async fn generate_token(&self, ctx: &Context<'_>, name: String) -> Result<GeneratedToken> {
+        let user = ctx.data::<AuthenticatedUser>()?;
+        info!("generating token for user {}", user.id);
         let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
 
         let generated = generate_new_token();
