@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use aws_sdk_dynamodb::Client;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::Deserialize;
@@ -39,21 +40,25 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
                             }
                             Err(err) => {
                                 error!("failed to get user: {}", err);
+                                return Err(anyhow!("failed to get extra claims for user").into());
                             }
                         };
                     }
                     None => {
                         error!("missing identity in trigger event");
+                        return Err(anyhow!("failed to get extra claims for user").into());
                     }
                 },
                 Err(_) => {
                     error!("identities could not be parsed");
+                    return Err(anyhow!("failed to get extra claims for user").into());
                 }
             }
         }
         Err(err) => {
             let error_message = err.to_string();
             error!(error_message, "failed to parse trigger event");
+            return Err(anyhow!("failed to get extra claims for user").into());
         }
     }
 
