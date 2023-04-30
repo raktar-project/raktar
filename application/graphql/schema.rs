@@ -18,6 +18,12 @@ struct GeneratedToken {
     token: String,
 }
 
+#[derive(SimpleObject)]
+struct Token {
+    user_id: u32,
+    name: String,
+}
+
 impl From<CrateDetails> for Crate {
     fn from(value: CrateDetails) -> Self {
         Self { name: value.name }
@@ -36,6 +42,20 @@ impl Query {
             .collect();
 
         Ok(crates)
+    }
+
+    async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {
+        let user = ctx.data::<AuthenticatedUser>()?;
+        let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
+
+        let token_items = repository.list_auth_tokens(user.id).await?;
+        Ok(token_items
+            .into_iter()
+            .map(|item| Token {
+                user_id: item.user_id,
+                name: item.name,
+            })
+            .collect())
     }
 }
 

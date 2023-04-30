@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 pub struct TokenItem {
     pk: String,
     sk: String,
-    name: String,
-    user_id: u32,
+    pub name: String,
+    pub user_id: u32,
 }
 
 impl TokenItem {

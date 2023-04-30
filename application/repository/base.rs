@@ -22,6 +22,7 @@ pub trait Repository {
     async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
     async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>>;
     async fn store_auth_token(&self, token: &[u8], name: String, user_id: u32) -> AppResult<()>;
+    async fn list_auth_tokens(&self, user_id: u32) -> AppResult<Vec<TokenItem>>;
     async fn get_auth_token(&self, token: &[u8]) -> AppResult<Option<TokenItem>>;
     async fn get_or_create_user(&self, user_id: &str) -> AppResult<User>;
 }

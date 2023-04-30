@@ -26,10 +26,19 @@ pub async fn graphql_handler(
             schema.execute(request).await.into()
         }
         Err(_) => {
-            let err = async_graphql::Error::new("failed to get claims from token")
-                .into_server_error(async_graphql::Pos { line: 0, column: 0 });
-            let response = async_graphql::Response::from_errors(err.into());
-            response.into()
+            // In local, we allow requests with no authenticated user,
+            // mostly to let the frontend to pull the schema.
+            // TODO: revise this, we can probably do something smarter
+            #[cfg(feature = "local")]
+            return schema.execute(req.into_inner()).await.into();
+
+            #[cfg(not(feature = "local"))]
+            {
+                let err = async_graphql::Error::new("failed to get claims from token")
+                    .into_server_error(async_graphql::Pos { line: 0, column: 0 });
+                let response = async_graphql::Response::from_errors(err.into());
+                response.into()
+            }
         }
     }
 }
