@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use aws_sdk_dynamodb::Client;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
-use serde::Deserialize;
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use serde_json::{to_value, Value};
 use tracing::{error, info, Level};
 
 use raktar::repository::{DynamoDBRepository, Repository};
@@ -19,7 +19,7 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
-    let (event, _context) = event.into_parts();
+    let (mut event, _context) = event.into_parts();
 
     // TODO: these should be cached between invocations
     let aws_config = aws_config::from_env().load().await;
@@ -33,10 +33,15 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
             match serde_json::from_str::<Vec<Identity>>(&identities_string) {
                 Ok(identities) => match identities.get(0) {
                     Some(identity) => {
-                        let user_id = &identity.user_id;
-                        match repository.get_or_create_user(user_id).await {
-                            Ok(_) => {
-                                info!(user_id, "adding extra claims for user");
+                        let login = &identity.user_id;
+                        match repository.get_or_create_user(login).await {
+                            Ok(user) => {
+                                info!(login, id = user.id, "adding extra claims for user");
+                                let response = Response::new(user.id);
+                                event
+                                    .as_object_mut()
+                                    .expect("the trigger event to be an object")
+                                    .insert("response".to_string(), to_value(response).unwrap());
                             }
                             Err(err) => {
                                 error!("failed to get user: {}", err);
@@ -63,6 +68,33 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     }
 
     Ok(event)
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Response {
+    claims_override_details: ClaimsOverrideDetails,
+}
+
+impl Response {
+    fn new(autogen_id: u32) -> Self {
+        Self {
+            claims_override_details: ClaimsOverrideDetails {
+                claims_to_add_or_override: Claims { autogen_id },
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaimsOverrideDetails {
+    claims_to_add_or_override: Claims,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct Claims {
+    autogen_id: u32,
 }
 
 #[derive(Clone, Debug, Deserialize)]

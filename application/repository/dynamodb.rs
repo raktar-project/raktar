@@ -442,7 +442,7 @@ impl Repository for DynamoDBRepository {
     async fn get_or_create_user(&self, login: &str) -> AppResult<User> {
         #[derive(Debug, serde::Deserialize)]
         struct LoginNameMapping {
-            user_id: u32,
+            id: u32,
         }
 
         let output = match self
@@ -470,7 +470,7 @@ impl Repository for DynamoDBRepository {
             Some(item) => {
                 let mapping: LoginNameMapping = from_item(item).map_err(|_| internal_error())?;
                 Ok(User {
-                    id: mapping.user_id,
+                    id: mapping.id,
                     login: login.to_string(),
                     name: None,
                 })

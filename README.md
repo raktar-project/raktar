@@ -15,9 +15,7 @@ flag will be stabilised.
 > **Warning**
 >
 > This application is work in progress. The key APIs work, allowing you to publish crates, query the index, download crates, yank and unyank versions.
-> However, many features and authentication are not implemented yet. Use it at your own risk.
->
-> The instructions below were tested on macOS and may not work as is on other systems.
+> However, the backend is somewhat useless without the frontend application that's in early stages of development and has not been open-sourced yet.
 
 # Pre-requisites
 
