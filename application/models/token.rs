@@ -7,7 +7,7 @@ pub struct TokenItem {
     pk: String,
     sk: String,
     name: String,
-    user: u32,
+    user_id: u32,
 }
 
 impl TokenItem {
@@ -16,7 +16,7 @@ impl TokenItem {
             pk: Self::get_pk(token),
             sk: Self::get_sk(),
             name,
-            user: user_id,
+            user_id,
         }
     }
 
