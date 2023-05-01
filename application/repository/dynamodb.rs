@@ -15,6 +15,7 @@ use tracing::{error, info};
 use crate::error::{internal_error, AppError, AppResult};
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
+use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
 use crate::models::user::User;
 use crate::repository::Repository;
@@ -41,6 +42,10 @@ impl DynamoDBRepository {
 
     fn get_package_version_key(version: &Version) -> AttributeValue {
         AttributeValue::S(format!("V#{}", version))
+    }
+
+    fn get_package_metadata_key(version: &Version) -> AttributeValue {
+        AttributeValue::S(format!("META#{}", version))
     }
 
     fn get_crate_info_key(&self, crate_name: String) -> Option<HashMap<String, AttributeValue>> {
@@ -191,6 +196,23 @@ impl DynamoDBRepository {
         }
     }
 
+    async fn put_package_metadata(&self, metadata: Metadata) -> AppResult<()> {
+        let pk = Self::get_package_key(&metadata.name);
+        let sk = Self::get_package_metadata_key(&metadata.vers);
+        let item = to_item(metadata).map_err(|_| internal_error())?;
+        self.db_client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .item("pk", pk)
+            .item("sk", sk)
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        Ok(())
+    }
+
     async fn create_next_user(&self, login: &str) -> AppResult<User> {
         let next_id = self.find_next_user_id().await?;
         info!("next available ID is {}", next_id);
@@ -303,9 +325,9 @@ impl Repository for DynamoDBRepository {
     async fn store_package_info(
         &self,
         crate_name: &str,
-        description: String,
         version: &Version,
         package_info: PackageInfo,
+        metadata: Metadata,
     ) -> AppResult<()> {
         let old_crate_details = self.get_crate_details(crate_name).await?;
         let should_update_crate_details = old_crate_details
@@ -319,7 +341,7 @@ impl Repository for DynamoDBRepository {
                 // TODO: this should be the user's ID once auth is in place
                 owners: vec![0],
                 max_version: package_info.vers.clone(),
-                description,
+                description: metadata.description.clone().unwrap_or("".to_string()),
             };
             self.put_package_version_with_new_details(
                 crate_name,
@@ -328,11 +350,13 @@ impl Repository for DynamoDBRepository {
                 crate_details,
                 old_crate_details.is_none(),
             )
-            .await
+            .await?;
         } else {
             self.put_package_version(crate_name, version, package_info)
-                .await
+                .await?;
         }
+
+        self.put_package_metadata(metadata).await
     }
 
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()> {

@@ -5,6 +5,7 @@ use semver::Version;
 use crate::error::AppResult;
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
+use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
 use crate::models::user::User;
 
@@ -14,9 +15,9 @@ pub trait Repository {
     async fn store_package_info(
         &self,
         crate_name: &str,
-        description: String,
         version: &Version,
         package_info: PackageInfo,
+        metadata: Metadata,
     ) -> AppResult<()>;
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()>;
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
