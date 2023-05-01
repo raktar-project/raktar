@@ -1,35 +1,12 @@
-use async_graphql::{Context, EmptySubscription, Object, Result, Schema, SimpleObject};
+use async_graphql::{Context, EmptySubscription, Object, Result, Schema};
 
 use crate::graphql::handler::AuthenticatedUser;
+use crate::graphql::types::{Crate, DeletedToken, GeneratedToken, Token};
 use raktar::auth::generate_new_token;
 use raktar::error::internal_error;
-use raktar::models::crate_details::CrateDetails;
 use raktar::repository::DynRepository;
 
 pub struct Query;
-
-#[derive(SimpleObject)]
-struct Crate {
-    name: String,
-}
-
-#[derive(SimpleObject)]
-struct GeneratedToken {
-    token: String,
-}
-
-#[derive(SimpleObject)]
-struct Token {
-    user_id: u32,
-    token_id: String,
-    name: String,
-}
-
-impl From<CrateDetails> for Crate {
-    fn from(value: CrateDetails) -> Self {
-        Self { name: value.name }
-    }
-}
 
 #[Object]
 impl Query {
@@ -50,14 +27,7 @@ impl Query {
         let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
 
         let token_items = repository.list_auth_tokens(user.id).await?;
-        Ok(token_items
-            .into_iter()
-            .map(|item| Token {
-                user_id: item.user_id,
-                token_id: item.token_id,
-                name: item.name,
-            })
-            .collect())
+        Ok(token_items.into_iter().map(From::from).collect())
     }
 }
 
@@ -69,16 +39,19 @@ impl Mutation {
         let user = ctx.data::<AuthenticatedUser>()?;
         let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
 
-        let token = generate_new_token();
-        repository
-            .store_auth_token(token.as_bytes(), name, user.id)
+        let key = generate_new_token();
+        let token = repository
+            .store_auth_token(key.as_bytes(), name, user.id)
             .await?;
-        let generated_token = GeneratedToken { token };
+        let generated_token = GeneratedToken {
+            token: token.into(),
+            key,
+        };
 
         Ok(generated_token)
     }
 
-    async fn delete_token(&self, ctx: &Context<'_>, token_id: String) -> Result<String> {
+    async fn delete_token(&self, ctx: &Context<'_>, token_id: String) -> Result<DeletedToken> {
         let user = ctx.data::<AuthenticatedUser>()?;
         let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
 
@@ -86,7 +59,7 @@ impl Mutation {
             .delete_auth_token(user.id, token_id.clone())
             .await?;
 
-        Ok(token_id)
+        Ok(DeletedToken { id: token_id })
     }
 }
 
