@@ -81,24 +81,27 @@ impl DynamoDBRepository {
         Ok(details)
     }
 
-    async fn put_new_package(
+    async fn put_package_version_with_new_details(
         &self,
         crate_name: &str,
         version: &Version,
         package_info: PackageInfo,
+        crate_details: CrateDetails,
+        is_new: bool,
     ) -> AppResult<()> {
-        let details = CrateDetails {
-            name: crate_name.to_string(),
-            // TODO: this should be the user's ID once auth is in place
-            owners: vec![0],
+        let item = to_item(crate_details).unwrap();
+        // TODO: when it's not new, this should probably verify we're not overwriting a competing write
+        let condition_expression = if is_new {
+            Some("attribute_not_exists(sk)".to_string())
+        } else {
+            None
         };
-        let item = to_item(details).unwrap();
         let put_item = Put::builder()
             .table_name(&self.table_name)
             .set_item(Some(item))
             .item("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
             .item("sk", AttributeValue::S(crate_name.to_string()))
-            .condition_expression("attribute_not_exists(sk)")
+            .set_condition_expression(condition_expression)
             .build();
         let put_details_item = TransactWriteItem::builder().put(put_item).build();
 
@@ -140,7 +143,7 @@ impl DynamoDBRepository {
         }
     }
 
-    async fn put_new_package_version(
+    async fn put_package_version(
         &self,
         crate_name: &str,
         version: &Version,
@@ -300,20 +303,35 @@ impl Repository for DynamoDBRepository {
     async fn store_package_info(
         &self,
         crate_name: &str,
+        description: String,
         version: &Version,
         package_info: PackageInfo,
     ) -> AppResult<()> {
-        match self.get_crate_details(crate_name).await? {
-            // the crate does not exist yet, write the crate details and the new version at once
-            None => {
-                self.put_new_package(crate_name, version, package_info)
-                    .await
-            }
-            // crate details already exist, write the new version
-            Some(_) => {
-                self.put_new_package_version(crate_name, version, package_info)
-                    .await
-            }
+        let old_crate_details = self.get_crate_details(crate_name).await?;
+        let should_update_crate_details = old_crate_details
+            .as_ref()
+            .map(|old| old.max_version < package_info.vers)
+            .unwrap_or(true);
+
+        if should_update_crate_details {
+            let crate_details = CrateDetails {
+                name: crate_name.to_string(),
+                // TODO: this should be the user's ID once auth is in place
+                owners: vec![0],
+                max_version: package_info.vers.clone(),
+                description,
+            };
+            self.put_package_version_with_new_details(
+                crate_name,
+                version,
+                package_info,
+                crate_details,
+                old_crate_details.is_none(),
+            )
+            .await
+        } else {
+            self.put_package_version(crate_name, version, package_info)
+                .await
         }
     }
 

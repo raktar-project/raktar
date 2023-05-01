@@ -14,6 +14,7 @@ pub trait Repository {
     async fn store_package_info(
         &self,
         crate_name: &str,
+        description: String,
         version: &Version,
         package_info: PackageInfo,
     ) -> AppResult<()>;
