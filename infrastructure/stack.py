@@ -1,11 +1,11 @@
 """Stack for Raktar."""
-import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_s3 as s3
 from aws_cdk import Environment as CdkEnvironment
 from aws_cdk import Stack
 from constructs import Construct
 
 from infrastructure.api import WebApi
+from infrastructure.database import Database
 from infrastructure.rust_function import RustFunction
 from infrastructure.settings import Settings
 from infrastructure.user_pool import RaktarUserPool
@@ -25,7 +25,8 @@ class RaktarStack(Stack):
         super().__init__(scope, construct_id, env=cdk_env, cross_region_references=True)
         self.settings = settings
 
-        table = self.create_database_table()
+        database = Database(self, "Database")
+        table = database.table
         bucket = self.create_s3_bucket()
         backend_function = RustFunction(
             self,
@@ -64,19 +65,6 @@ class RaktarStack(Stack):
             api_lambda=backend_function.function,
             settings=settings,
             user_pool=user_pool,
-        )
-
-    def create_database_table(self) -> dynamodb.Table:
-        return dynamodb.Table(
-            self,
-            "RegistryTable",
-            partition_key=dynamodb.Attribute(
-                name="pk", type=dynamodb.AttributeType.STRING
-            ),
-            sort_key=dynamodb.Attribute(name="sk", type=dynamodb.AttributeType.STRING),
-            billing_mode=dynamodb.BillingMode.PROVISIONED,
-            read_capacity=5,
-            write_capacity=1,
         )
 
     def create_s3_bucket(self) -> s3.Bucket:
