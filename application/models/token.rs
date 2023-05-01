@@ -1,13 +1,15 @@
 use crate::auth::hash;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TokenItem {
-    pk: String,
-    sk: String,
+    pub pk: String,
+    pub sk: String,
     pub name: String,
     pub user_id: u32,
+    pub token_id: String,
 }
 
 impl TokenItem {
@@ -17,6 +19,7 @@ impl TokenItem {
             sk: Self::get_sk(),
             name,
             user_id,
+            token_id: Uuid::new_v4().hyphenated().to_string(),
         }
     }
 

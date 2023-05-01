@@ -21,6 +21,7 @@ struct GeneratedToken {
 #[derive(SimpleObject)]
 struct Token {
     user_id: u32,
+    token_id: String,
     name: String,
 }
 
@@ -53,6 +54,7 @@ impl Query {
             .into_iter()
             .map(|item| Token {
                 user_id: item.user_id,
+                token_id: item.token_id,
                 name: item.name,
             })
             .collect())
@@ -74,6 +76,17 @@ impl Mutation {
         let generated_token = GeneratedToken { token };
 
         Ok(generated_token)
+    }
+
+    async fn delete_token(&self, ctx: &Context<'_>, token_id: String) -> Result<String> {
+        let user = ctx.data::<AuthenticatedUser>()?;
+        let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
+
+        repository
+            .delete_auth_token(user.id, token_id.clone())
+            .await?;
+
+        Ok(token_id)
     }
 }
 
