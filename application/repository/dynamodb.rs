@@ -427,6 +427,23 @@ impl Repository for DynamoDBRepository {
         }
     }
 
+    async fn get_crate_details(&self, crate_name: &str) -> AppResult<CrateDetails> {
+        let result = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+            .key("sk", AttributeValue::S(crate_name.to_string()))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        let item = result.item().cloned().ok_or(internal_error())?;
+        let crate_details = from_item(item).map_err(|_| internal_error())?;
+
+        Ok(crate_details)
+    }
+
     async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>> {
         let result = self
             .db_client
@@ -442,6 +459,23 @@ impl Repository for DynamoDBRepository {
         let crates = from_items::<CrateDetails>(items.to_vec()).map_err(|_| internal_error())?;
 
         Ok(crates)
+    }
+
+    async fn get_crate_metadata(&self, crate_name: &str, version: &Version) -> AppResult<Metadata> {
+        let result = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", DynamoDBRepository::get_package_key(crate_name))
+            .key("sk", DynamoDBRepository::get_package_metadata_key(version))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        let item = result.item().cloned().ok_or(internal_error())?;
+        let metadata = from_item(item).map_err(|_| internal_error())?;
+
+        Ok(metadata)
     }
 
     async fn store_auth_token(

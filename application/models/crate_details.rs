@@ -1,6 +1,7 @@
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
+// TODO: rename this to crate summary?
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CrateDetails {
     pub name: String,
