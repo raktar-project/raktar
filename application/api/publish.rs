@@ -31,10 +31,10 @@ pub async fn publish_crate(
     let vers = metadata.vers.clone();
     let crate_name = metadata.name.clone();
     let checksum: String = Sha256::digest(&crate_bytes).encode_hex();
-    let package_info = PackageInfo::from_metadata(metadata, &checksum);
+    let package_info = PackageInfo::from_metadata(metadata.clone(), &checksum);
 
     repository
-        .store_package_info(&crate_name, &vers, package_info)
+        .store_package_info(&crate_name, &vers, package_info, metadata)
         .await?;
     storage.store_crate(&crate_name, vers, crate_bytes).await?;
 

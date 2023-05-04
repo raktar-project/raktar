@@ -31,6 +31,7 @@ pub fn build_router(repository: DynRepository, storage: DynCrateStorage) -> Rout
     let state = (repository, storage);
 
     Router::new()
+        .route("/config.json", get(get_config_json))
         .nest("/", core_router)
         .nest("/gql", graphql_router)
         .with_state(state)
@@ -38,7 +39,6 @@ pub fn build_router(repository: DynRepository, storage: DynCrateStorage) -> Rout
 
 fn build_core_router(repository: DynRepository) -> Router<AppState> {
     Router::new()
-        .route("/config.json", get(get_config_json))
         .route("/api/v1/crates/new", put(publish_crate))
         .route(
             "/api/v1/crates/:crate_name/owners",

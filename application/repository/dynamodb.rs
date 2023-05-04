@@ -15,6 +15,7 @@ use tracing::{error, info};
 use crate::error::{internal_error, AppError, AppResult};
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
+use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
 use crate::models::user::User;
 use crate::repository::Repository;
@@ -41,6 +42,10 @@ impl DynamoDBRepository {
 
     fn get_package_version_key(version: &Version) -> AttributeValue {
         AttributeValue::S(format!("V#{}", version))
+    }
+
+    fn get_package_metadata_key(version: &Version) -> AttributeValue {
+        AttributeValue::S(format!("META#{}", version))
     }
 
     fn get_crate_info_key(&self, crate_name: String) -> Option<HashMap<String, AttributeValue>> {
@@ -81,24 +86,27 @@ impl DynamoDBRepository {
         Ok(details)
     }
 
-    async fn put_new_package(
+    async fn put_package_version_with_new_details(
         &self,
         crate_name: &str,
         version: &Version,
         package_info: PackageInfo,
+        crate_details: CrateDetails,
+        is_new: bool,
     ) -> AppResult<()> {
-        let details = CrateDetails {
-            name: crate_name.to_string(),
-            // TODO: this should be the user's ID once auth is in place
-            owners: vec![0],
+        let item = to_item(crate_details).unwrap();
+        // TODO: when it's not new, this should probably verify we're not overwriting a competing write
+        let condition_expression = if is_new {
+            Some("attribute_not_exists(sk)".to_string())
+        } else {
+            None
         };
-        let item = to_item(details).unwrap();
         let put_item = Put::builder()
             .table_name(&self.table_name)
             .set_item(Some(item))
             .item("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
             .item("sk", AttributeValue::S(crate_name.to_string()))
-            .condition_expression("attribute_not_exists(sk)")
+            .set_condition_expression(condition_expression)
             .build();
         let put_details_item = TransactWriteItem::builder().put(put_item).build();
 
@@ -140,7 +148,7 @@ impl DynamoDBRepository {
         }
     }
 
-    async fn put_new_package_version(
+    async fn put_package_version(
         &self,
         crate_name: &str,
         version: &Version,
@@ -186,6 +194,23 @@ impl DynamoDBRepository {
                 Err(err)
             }
         }
+    }
+
+    async fn put_package_metadata(&self, metadata: Metadata) -> AppResult<()> {
+        let pk = Self::get_package_key(&metadata.name);
+        let sk = Self::get_package_metadata_key(&metadata.vers);
+        let item = to_item(metadata).map_err(|_| internal_error())?;
+        self.db_client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .item("pk", pk)
+            .item("sk", sk)
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        Ok(())
     }
 
     async fn create_next_user(&self, login: &str) -> AppResult<User> {
@@ -302,19 +327,36 @@ impl Repository for DynamoDBRepository {
         crate_name: &str,
         version: &Version,
         package_info: PackageInfo,
+        metadata: Metadata,
     ) -> AppResult<()> {
-        match self.get_crate_details(crate_name).await? {
-            // the crate does not exist yet, write the crate details and the new version at once
-            None => {
-                self.put_new_package(crate_name, version, package_info)
-                    .await
-            }
-            // crate details already exist, write the new version
-            Some(_) => {
-                self.put_new_package_version(crate_name, version, package_info)
-                    .await
-            }
+        let old_crate_details = self.get_crate_details(crate_name).await?;
+        let should_update_crate_details = old_crate_details
+            .as_ref()
+            .map(|old| old.max_version < package_info.vers)
+            .unwrap_or(true);
+
+        if should_update_crate_details {
+            let crate_details = CrateDetails {
+                name: crate_name.to_string(),
+                // TODO: this should be the user's ID once auth is in place
+                owners: vec![0],
+                max_version: package_info.vers.clone(),
+                description: metadata.description.clone().unwrap_or("".to_string()),
+            };
+            self.put_package_version_with_new_details(
+                crate_name,
+                version,
+                package_info,
+                crate_details,
+                old_crate_details.is_none(),
+            )
+            .await?;
+        } else {
+            self.put_package_version(crate_name, version, package_info)
+                .await?;
         }
+
+        self.put_package_metadata(metadata).await
     }
 
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()> {
@@ -385,6 +427,23 @@ impl Repository for DynamoDBRepository {
         }
     }
 
+    async fn get_crate_details(&self, crate_name: &str) -> AppResult<CrateDetails> {
+        let result = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+            .key("sk", AttributeValue::S(crate_name.to_string()))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        let item = result.item().cloned().ok_or(internal_error())?;
+        let crate_details = from_item(item).map_err(|_| internal_error())?;
+
+        Ok(crate_details)
+    }
+
     async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>> {
         let result = self
             .db_client
@@ -400,6 +459,23 @@ impl Repository for DynamoDBRepository {
         let crates = from_items::<CrateDetails>(items.to_vec()).map_err(|_| internal_error())?;
 
         Ok(crates)
+    }
+
+    async fn get_crate_metadata(&self, crate_name: &str, version: &Version) -> AppResult<Metadata> {
+        let result = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", DynamoDBRepository::get_package_key(crate_name))
+            .key("sk", DynamoDBRepository::get_package_metadata_key(version))
+            .send()
+            .await
+            .map_err(|_| internal_error())?;
+
+        let item = result.item().cloned().ok_or(internal_error())?;
+        let metadata = from_item(item).map_err(|_| internal_error())?;
+
+        Ok(metadata)
     }
 
     async fn store_auth_token(

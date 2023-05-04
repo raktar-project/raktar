@@ -1,7 +1,7 @@
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema};
 
 use crate::graphql::handler::AuthenticatedUser;
-use crate::graphql::types::{Crate, DeletedToken, GeneratedToken, Token};
+use crate::graphql::types::{Crate, CrateSummary, DeletedToken, GeneratedToken, Token};
 use raktar::auth::generate_new_token;
 use raktar::error::internal_error;
 use raktar::repository::DynRepository;
@@ -10,7 +10,7 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn crates(&self, ctx: &Context<'_>) -> Result<Vec<Crate>> {
+    async fn crates(&self, ctx: &Context<'_>) -> Result<Vec<CrateSummary>> {
         let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
         let crates = repository
             .get_all_crate_details()
@@ -20,6 +20,17 @@ impl Query {
             .collect();
 
         Ok(crates)
+    }
+
+    async fn crate_details(&self, ctx: &Context<'_>, name: String) -> Result<Crate> {
+        let repository = ctx.data::<DynRepository>().map_err(|_| internal_error())?;
+
+        let details = repository.get_crate_details(&name).await?;
+        let metadata = repository
+            .get_crate_metadata(&name, &details.max_version)
+            .await?;
+
+        Ok(metadata.into())
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {
