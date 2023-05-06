@@ -51,8 +51,8 @@ to deploy the service.
 To add the alternate registry, modify the `config.toml` (either in your project, or globally in `~/.cargo/config.toml`):
 
 ```toml
-[registries]
-my-registry = { index = "sparse+https://{domain}/", token = "does-not-matter-for-now" }
+[registries.my-registry]
+index = "sparse+https://{domain}/"
 ```
 
 > **Note**
