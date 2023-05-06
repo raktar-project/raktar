@@ -1,10 +1,12 @@
 use anyhow::anyhow;
+use aws_smithy_http::result::SdkError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use semver::Version;
 use serde_json::json;
 use thiserror::Error;
+use tracing::error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
@@ -21,7 +23,9 @@ pub enum AppError {
         version: Version,
     },
     #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    Anyhow(#[from] anyhow::Error),
+    #[error("unexpected error")]
+    Other,
 }
 
 impl IntoResponse for AppError {
@@ -31,11 +35,21 @@ impl IntoResponse for AppError {
             AppError::NonExistentPackageInfo(_) => StatusCode::NOT_FOUND,
             AppError::NonExistentCrateVersion { .. } => StatusCode::NOT_FOUND,
             AppError::DuplicateCrateVersion { .. } => StatusCode::BAD_REQUEST,
-            AppError::Other(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Other => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         let payload = json!({ "errors": [{ "detail": detail }] });
         (status_code, Json(payload)).into_response()
+    }
+}
+
+impl<E> From<SdkError<E>> for AppError {
+    fn from(err: SdkError<E>) -> Self {
+        let error_message = format!("{}", err);
+        let error_type = "aws_sdk".to_string();
+        error!(error_message, error_type, "unexpected error");
+        Self::Other
     }
 }
 
