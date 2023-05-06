@@ -67,10 +67,7 @@ impl DynamoDBRepository {
             .await?;
 
         let details = if let Some(item) = res.item {
-            let crate_info: CrateDetails = from_item(item).map_err(|_| {
-                error!(crate_name, "failed to parse crate info");
-                internal_error()
-            })?;
+            let crate_info: CrateDetails = from_item(item)?;
 
             Some(crate_info)
         } else {
@@ -193,7 +190,7 @@ impl DynamoDBRepository {
     async fn put_package_metadata(&self, metadata: Metadata) -> AppResult<()> {
         let pk = Self::get_package_key(&metadata.name);
         let sk = Self::get_package_metadata_key(&metadata.vers);
-        let item = to_item(metadata).map_err(|_| internal_error())?;
+        let item = to_item(metadata)?;
         self.db_client
             .put_item()
             .table_name(&self.table_name)
@@ -287,13 +284,7 @@ impl Repository for DynamoDBRepository {
         match result.items() {
             None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
             Some(items) => {
-                let infos = from_items::<PackageInfo>(items.to_vec()).map_err(|_| {
-                    error!(
-                        crate_name,
-                        "failed to parse DynamoDB package info items for crate"
-                    );
-                    anyhow!("internal server error")
-                })?;
+                let infos = from_items::<PackageInfo>(items.to_vec())?;
                 Ok(infos
                     .into_iter()
                     .map(|info| serde_json::to_string(&info).unwrap())
@@ -416,7 +407,7 @@ impl Repository for DynamoDBRepository {
             .await?;
 
         let item = result.item().cloned().ok_or(internal_error())?;
-        let crate_details = from_item(item).map_err(|_| internal_error())?;
+        let crate_details = from_item(item)?;
 
         Ok(crate_details)
     }
@@ -432,7 +423,7 @@ impl Repository for DynamoDBRepository {
             .await?;
 
         let items = result.items().unwrap_or(&[]);
-        let crates = from_items::<CrateDetails>(items.to_vec()).map_err(|_| internal_error())?;
+        let crates = from_items::<CrateDetails>(items.to_vec())?;
 
         Ok(crates)
     }
@@ -448,7 +439,7 @@ impl Repository for DynamoDBRepository {
             .await?;
 
         let item = result.item().cloned().ok_or(internal_error())?;
-        let metadata = from_item(item).map_err(|_| internal_error())?;
+        let metadata = from_item(item)?;
 
         Ok(metadata)
     }
@@ -460,7 +451,7 @@ impl Repository for DynamoDBRepository {
         user_id: u32,
     ) -> AppResult<TokenItem> {
         let token_item = TokenItem::new(token, name, user_id);
-        let item = to_item(token_item.clone()).map_err(|_| internal_error())?;
+        let item = to_item(token_item.clone())?;
         self.db_client
             .put_item()
             .table_name(&self.table_name)
@@ -500,7 +491,7 @@ impl Repository for DynamoDBRepository {
             .await?;
 
         let items = output.items().map(|items| items.to_vec()).unwrap_or(vec![]);
-        let tokens = from_items(items).map_err(|_| internal_error())?;
+        let tokens = from_items(items)?;
 
         Ok(tokens)
     }
@@ -516,7 +507,7 @@ impl Repository for DynamoDBRepository {
             .await?;
 
         let token_item = if let Some(item) = output.item().cloned() {
-            Some(from_item(item).map_err(|_| internal_error())?)
+            Some(from_item(item)?)
         } else {
             None
         };
@@ -545,7 +536,7 @@ impl Repository for DynamoDBRepository {
                 self.create_next_user(login).await
             }
             Some(item) => {
-                let mapping: LoginNameMapping = from_item(item).map_err(|_| internal_error())?;
+                let mapping: LoginNameMapping = from_item(item)?;
                 Ok(User {
                     id: mapping.id,
                     login: login.to_string(),
