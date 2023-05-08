@@ -1,4 +1,6 @@
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema};
+use semver::Version;
+use std::str::FromStr;
 
 use crate::graphql::handler::AuthenticatedUser;
 use crate::graphql::types::{Crate, CrateSummary, DeletedToken, GeneratedToken, Token};
@@ -21,14 +23,23 @@ impl Query {
         Ok(crates)
     }
 
-    async fn crate_details(&self, ctx: &Context<'_>, name: String) -> Result<Crate> {
+    async fn crate_details(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+        version: Option<String>,
+    ) -> Result<Crate> {
         let repository = ctx.data::<DynRepository>()?;
 
-        let details = repository.get_crate_details(&name).await?;
+        let version = match version {
+            None => {
+                let details = repository.get_crate_details(&name).await?;
+                details.max_version
+            }
+            Some(v) => Version::from_str(&v)?,
+        };
         // TODO: these two should be in parallel
-        let metadata = repository
-            .get_crate_metadata(&name, &details.max_version)
-            .await?;
+        let metadata = repository.get_crate_metadata(&name, &version).await?;
         let versions = repository.list_crate_versions(&name).await?;
 
         let krate = Crate::new(metadata, versions);
