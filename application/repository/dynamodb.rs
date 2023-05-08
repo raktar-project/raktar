@@ -5,6 +5,7 @@ use aws_sdk_dynamodb::operation::update_item::UpdateItemError;
 use aws_sdk_dynamodb::types::{AttributeValue, Put, ReturnValue, TransactWriteItem};
 use aws_sdk_dynamodb::Client;
 use semver::Version;
+use serde::Deserialize;
 use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
 use std::collections::HashMap;
@@ -442,6 +443,37 @@ impl Repository for DynamoDBRepository {
         let metadata = from_item(item)?;
 
         Ok(metadata)
+    }
+
+    async fn list_crate_versions(&self, crate_name: &str) -> AppResult<Vec<Version>> {
+        #[derive(Debug, Deserialize)]
+        struct QueryItem {
+            sk: String,
+        }
+
+        let output = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
+            .expression_attribute_values(":pk", DynamoDBRepository::get_package_key(crate_name))
+            .expression_attribute_values(":prefix", AttributeValue::S("V#".to_string()))
+            .projection_expression("sk")
+            .send()
+            .await?;
+
+        Ok(match output.items() {
+            None => vec![],
+            // TODO: fix unwraps
+            Some(items) => {
+                let sort_keys: Vec<QueryItem> = from_items(items.to_vec())?;
+                sort_keys
+                    .into_iter()
+                    .map(|item| item.sk.strip_prefix("V#").unwrap().to_string())
+                    .map(|version_string| Version::from_str(&version_string).unwrap())
+                    .collect()
+            }
+        })
     }
 
     async fn store_auth_token(

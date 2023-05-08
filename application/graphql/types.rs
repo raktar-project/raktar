@@ -1,4 +1,5 @@
 use async_graphql::SimpleObject;
+use semver::Version;
 
 use raktar::models::crate_details::CrateDetails;
 use raktar::models::metadata::Metadata;
@@ -31,10 +32,12 @@ pub struct Crate {
     keywords: Vec<String>,
     categories: Vec<String>,
     repository: Option<String>,
+    all_versions: Vec<String>,
 }
 
-impl From<Metadata> for Crate {
-    fn from(metadata: Metadata) -> Self {
+impl Crate {
+    pub(crate) fn new(metadata: Metadata, versions: Vec<Version>) -> Self {
+        let all_versions = versions.into_iter().map(|v| v.to_string()).collect();
         Self {
             name: metadata.name,
             version: metadata.vers.to_string(),
@@ -44,6 +47,7 @@ impl From<Metadata> for Crate {
             keywords: metadata.keywords,
             categories: metadata.categories,
             repository: metadata.repository.map(From::from),
+            all_versions,
         }
     }
 }
