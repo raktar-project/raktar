@@ -25,6 +25,7 @@ pub trait Repository {
     async fn get_crate_details(&self, crate_name: &str) -> AppResult<CrateDetails>;
     async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>>;
     async fn get_crate_metadata(&self, crate_name: &str, version: &Version) -> AppResult<Metadata>;
+    async fn list_crate_versions(&self, crate_name: &str) -> AppResult<Vec<Version>>;
     async fn store_auth_token(
         &self,
         token: &[u8],

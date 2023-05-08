@@ -25,11 +25,15 @@ impl Query {
         let repository = ctx.data::<DynRepository>()?;
 
         let details = repository.get_crate_details(&name).await?;
+        // TODO: these two should be in parallel
         let metadata = repository
             .get_crate_metadata(&name, &details.max_version)
             .await?;
+        let versions = repository.list_crate_versions(&name).await?;
 
-        Ok(metadata.into())
+        let krate = Crate::new(metadata, versions);
+
+        Ok(krate)
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {
