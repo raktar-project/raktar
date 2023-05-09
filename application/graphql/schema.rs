@@ -67,11 +67,13 @@ impl Mutation {
         let repository = ctx.data::<DynRepository>()?;
 
         let key = generate_new_token();
-        let token = repository
+        let token_item = repository
             .store_auth_token(key.as_bytes(), name, user.id)
             .await?;
+        let token: Token = token_item.into();
         let generated_token = GeneratedToken {
-            token: token.into(),
+            id: token.id.clone(),
+            token,
             key,
         };
 
