@@ -12,10 +12,10 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn crates(&self, ctx: &Context<'_>) -> Result<Vec<CrateSummary>> {
+    async fn crates(&self, ctx: &Context<'_>, filter: Option<String>) -> Result<Vec<CrateSummary>> {
         let repository = ctx.data::<DynRepository>()?;
         let crates = repository
-            .get_all_crate_details()
+            .get_all_crate_details(filter)
             .await?
             .into_iter()
             .map(From::from)
