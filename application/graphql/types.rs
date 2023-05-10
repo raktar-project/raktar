@@ -1,4 +1,4 @@
-use async_graphql::SimpleObject;
+use async_graphql::{SimpleObject, ID};
 use semver::Version;
 
 use raktar::models::crate_details::CrateDetails;
@@ -7,6 +7,7 @@ use raktar::models::token::TokenItem;
 
 #[derive(SimpleObject)]
 pub struct CrateSummary {
+    id: ID,
     name: String,
     max_version: String,
     description: String,
@@ -15,6 +16,7 @@ pub struct CrateSummary {
 impl From<CrateDetails> for CrateSummary {
     fn from(details: CrateDetails) -> Self {
         Self {
+            id: details.name.clone().into(),
             name: details.name,
             max_version: details.max_version.to_string(),
             description: details.description,
@@ -24,6 +26,7 @@ impl From<CrateDetails> for CrateSummary {
 
 #[derive(SimpleObject)]
 pub struct Crate {
+    id: ID,
     name: String,
     version: String,
     authors: Vec<String>,
@@ -39,6 +42,7 @@ impl Crate {
     pub(crate) fn new(metadata: Metadata, versions: Vec<Version>) -> Self {
         let all_versions = versions.into_iter().map(|v| v.to_string()).collect();
         Self {
+            id: format!("{}-{}", &metadata.name, &metadata.vers).into(),
             name: metadata.name,
             version: metadata.vers.to_string(),
             authors: metadata.authors,
@@ -54,7 +58,7 @@ impl Crate {
 
 #[derive(SimpleObject)]
 pub struct Token {
-    id: String,
+    pub id: ID,
     user_id: u32,
     name: String,
 }
@@ -62,7 +66,7 @@ pub struct Token {
 impl From<TokenItem> for Token {
     fn from(item: TokenItem) -> Self {
         Self {
-            id: item.token_id,
+            id: item.token_id.into(),
             user_id: item.user_id,
             name: item.name,
         }
@@ -71,8 +75,9 @@ impl From<TokenItem> for Token {
 
 #[derive(SimpleObject)]
 pub struct GeneratedToken {
-    pub(crate) key: String,
-    pub(crate) token: Token,
+    pub id: ID,
+    pub key: String,
+    pub token: Token,
 }
 
 #[derive(SimpleObject)]

@@ -10,6 +10,7 @@ use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
 use std::collections::HashMap;
 use std::str::FromStr;
+
 use tracing::{error, info};
 
 use crate::error::{internal_error, AppError, AppResult};
@@ -413,17 +414,36 @@ impl Repository for DynamoDBRepository {
         Ok(crate_details)
     }
 
-    async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>> {
-        let result = self
+    async fn get_all_crate_details(
+        &self,
+        filter: Option<String>,
+        limit: usize,
+    ) -> AppResult<Vec<CrateDetails>> {
+        let query_builder = self
             .db_client
             .query()
             .table_name(&self.table_name)
-            .key_condition_expression("pk = :pk")
-            .expression_attribute_values(":pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
-            .send()
-            .await?;
+            .limit(limit as i32);
 
-        let items = result.items().unwrap_or(&[]);
+        let query_builder = if let Some(prefix) = filter {
+            query_builder
+                .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
+                .expression_attribute_values(
+                    ":pk",
+                    AttributeValue::S(CRATES_PARTITION_KEY.to_string()),
+                )
+                .expression_attribute_values(":prefix", AttributeValue::S(prefix))
+        } else {
+            query_builder
+                .key_condition_expression("pk = :pk")
+                .expression_attribute_values(
+                    ":pk",
+                    AttributeValue::S(CRATES_PARTITION_KEY.to_string()),
+                )
+        };
+
+        let output = query_builder.send().await?;
+        let items = output.items().unwrap_or(&[]);
         let crates = from_items::<CrateDetails>(items.to_vec())?;
 
         Ok(crates)

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema};
 use semver::Version;
 use std::str::FromStr;
@@ -12,10 +13,20 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn crates(&self, ctx: &Context<'_>) -> Result<Vec<CrateSummary>> {
+    async fn crates(
+        &self,
+        ctx: &Context<'_>,
+        filter: Option<String>,
+        limit: Option<usize>,
+    ) -> Result<Vec<CrateSummary>> {
         let repository = ctx.data::<DynRepository>()?;
+
+        let limit = limit.unwrap_or(10);
+        if limit > 20 {
+            return Err(anyhow!(format!("limit must be less than {}", 20)).into());
+        }
         let crates = repository
-            .get_all_crate_details()
+            .get_all_crate_details(filter, limit)
             .await?
             .into_iter()
             .map(From::from)
@@ -67,11 +78,13 @@ impl Mutation {
         let repository = ctx.data::<DynRepository>()?;
 
         let key = generate_new_token();
-        let token = repository
+        let token_item = repository
             .store_auth_token(key.as_bytes(), name, user.id)
             .await?;
+        let token: Token = token_item.into();
         let generated_token = GeneratedToken {
-            token: token.into(),
+            id: token.id.clone(),
+            token,
             key,
         };
 

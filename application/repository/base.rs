@@ -23,7 +23,11 @@ pub trait Repository {
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
     async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
     async fn get_crate_details(&self, crate_name: &str) -> AppResult<CrateDetails>;
-    async fn get_all_crate_details(&self) -> AppResult<Vec<CrateDetails>>;
+    async fn get_all_crate_details(
+        &self,
+        filter: Option<String>,
+        limit: usize,
+    ) -> AppResult<Vec<CrateDetails>>;
     async fn get_crate_metadata(&self, crate_name: &str, version: &Version) -> AppResult<Metadata>;
     async fn list_crate_versions(&self, crate_name: &str) -> AppResult<Vec<Version>>;
     async fn store_auth_token(
