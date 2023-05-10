@@ -10,6 +10,7 @@ use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
 use serde_dynamo::from_item;
 use std::collections::HashMap;
 use std::str::FromStr;
+
 use tracing::{error, info};
 
 use crate::error::{internal_error, AppError, AppResult};
@@ -413,8 +414,16 @@ impl Repository for DynamoDBRepository {
         Ok(crate_details)
     }
 
-    async fn get_all_crate_details(&self, filter: Option<String>) -> AppResult<Vec<CrateDetails>> {
-        let query_builder = self.db_client.query().table_name(&self.table_name);
+    async fn get_all_crate_details(
+        &self,
+        filter: Option<String>,
+        limit: usize,
+    ) -> AppResult<Vec<CrateDetails>> {
+        let query_builder = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .limit(limit as i32);
 
         let query_builder = if let Some(prefix) = filter {
             query_builder
