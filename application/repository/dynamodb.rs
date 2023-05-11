@@ -6,7 +6,7 @@ use aws_sdk_dynamodb::types::{AttributeValue, Put, ReturnValue, TransactWriteIte
 use aws_sdk_dynamodb::Client;
 use semver::Version;
 use serde::Deserialize;
-use serde_dynamo::aws_sdk_dynamodb_0_25::{from_items, to_item};
+use serde_dynamo::aws_sdk_dynamodb_0_27::{from_items, to_item};
 use serde_dynamo::from_item;
 use std::collections::HashMap;
 use std::str::FromStr;
