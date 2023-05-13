@@ -1,5 +1,4 @@
 mod api;
-mod graphql;
 pub mod storage;
 
 use std::sync::Arc;

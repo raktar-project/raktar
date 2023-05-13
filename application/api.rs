@@ -9,6 +9,8 @@ mod yank;
 use axum::routing::{delete, get, put, Router};
 use axum::Extension;
 use raktar::auth::token_authenticator;
+use raktar::graphql::handler::{graphiql, graphql_handler};
+use raktar::graphql::schema::build_schema;
 use raktar::repository::DynRepository;
 
 use crate::api::config::get_config_json;
@@ -20,8 +22,6 @@ use crate::api::owners::{add_owners, list_owners};
 use crate::api::publish::publish_crate;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
-use crate::graphql::handler::{graphiql, graphql_handler};
-use crate::graphql::schema::build_schema;
 use crate::storage::DynCrateStorage;
 use crate::AppState;
 
