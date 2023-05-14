@@ -1,12 +1,14 @@
 use async_graphql::{Name, Request, Value};
 use aws_sdk_dynamodb::types::{
-    AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
+    AttributeDefinition, GlobalSecondaryIndex, KeySchemaElement, KeyType, Projection,
+    ProjectionType, ProvisionedThroughput, ScalarAttributeType,
 };
 use aws_sdk_dynamodb::Client;
 use raktar::graphql::handler::AuthenticatedUser;
 use raktar::graphql::schema::build_schema;
 use raktar::repository::{DynRepository, DynamoDBRepository};
 use rand::distributions::{Alphanumeric, DistString};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -14,9 +16,9 @@ async fn test_token_generation() {
     let repository = Arc::new(build_repository().await) as DynRepository;
     let schema = build_schema(repository);
 
-    let mutation = "
+    let mutation = r#"
     mutation {
-      generateToken(name: \"test token\") {
+      generateToken(name: "test token") {
         id
         key
         token {
@@ -24,10 +26,9 @@ async fn test_token_generation() {
           name
         }
       }
-    }";
+    }"#;
 
-    let response = schema.execute(build_request(mutation)).await;
-
+    let response = schema.execute(build_request(mutation, 0)).await;
     assert_eq!(response.errors.len(), 0);
 
     let actual_name = extract_data(&response.data, &["generateToken", "token", "name"]);
@@ -39,6 +40,72 @@ async fn test_token_generation() {
         assert_eq!(k.len(), 32);
     } else {
         panic!("the key is not a string");
+    }
+}
+
+#[tokio::test]
+async fn test_my_tokens() {
+    let repository = Arc::new(build_repository().await) as DynRepository;
+    let schema = build_schema(repository);
+
+    let mutation = r#"
+    mutation {
+      generateToken(name: "test token") {
+        id
+        key
+        token {
+          id
+          name
+        }
+      }
+    }"#;
+
+    // We create a new token for user 0
+    let response = schema.execute(build_request(mutation, 0)).await;
+    assert_eq!(response.errors.len(), 0);
+
+    // We create a new token with the same name for user 1
+    let response = schema.execute(build_request(mutation, 1)).await;
+    assert_eq!(response.errors.len(), 0);
+
+    // For user 1, we create another token
+    let mutation = r#"
+    mutation {
+      generateToken(name: "test token 2") {
+        id
+        key
+        token {
+          id
+          name
+        }
+      }
+    }"#;
+    let response = schema.execute(build_request(mutation, 1)).await;
+    assert_eq!(response.errors.len(), 0);
+
+    // We get the tokens for user 1
+    let query = r#"
+    query {
+      myTokens {
+        name
+      }
+    }"#;
+    let response = schema.execute(build_request(query, 1)).await;
+    assert_eq!(response.errors.len(), 0);
+
+    // There should be two tokens
+    let tokens_data = extract_data(&response.data, &["myTokens"]);
+    if let Value::List(tokens) = tokens_data {
+        let actual: HashSet<String> = tokens
+            .iter()
+            .map(|t| extract_data(t, &["name"]).to_string())
+            .collect();
+        let mut expected = HashSet::new();
+        expected.insert("\"test token\"".to_string());
+        expected.insert("\"test token 2\"".to_string());
+        assert_eq!(actual, expected);
+    } else {
+        panic!("tokens is not a list");
     }
 }
 
@@ -58,10 +125,6 @@ fn extract_data(data: &Value, path: &[&str]) -> Value {
 
 fn generate_random_key() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 16)
-}
-
-fn get_authenticated_user() -> AuthenticatedUser {
-    AuthenticatedUser { id: 1 }
 }
 
 async fn build_repository() -> DynamoDBRepository {
@@ -94,6 +157,11 @@ async fn build_repository() -> DynamoDBRepository {
         .attribute_name("sk")
         .attribute_type(ScalarAttributeType::S)
         .build();
+    let user_id_definition = AttributeDefinition::builder()
+        .attribute_name("user_id")
+        .attribute_type(ScalarAttributeType::N)
+        .build();
+    let gsi = build_user_data_gsi();
     db_client
         .create_table()
         .table_name(table_name)
@@ -101,6 +169,8 @@ async fn build_repository() -> DynamoDBRepository {
         .attribute_definitions(pk_definition)
         .key_schema(sk_schema)
         .attribute_definitions(sk_definition)
+        .attribute_definitions(user_id_definition)
+        .global_secondary_indexes(gsi)
         .provisioned_throughput(
             ProvisionedThroughput::builder()
                 .read_capacity_units(5)
@@ -113,7 +183,36 @@ async fn build_repository() -> DynamoDBRepository {
     DynamoDBRepository::new(db_client)
 }
 
-fn build_request(request_str: &str) -> Request {
+fn build_user_data_gsi() -> GlobalSecondaryIndex {
+    let pk_schema = KeySchemaElement::builder()
+        .key_type(KeyType::Hash)
+        .attribute_name("user_id".to_string())
+        .build();
+    let sk_schema = KeySchemaElement::builder()
+        .key_type(KeyType::Range)
+        .attribute_name("pk".to_string())
+        .build();
+
+    GlobalSecondaryIndex::builder()
+        .index_name("user_tokens")
+        .key_schema(pk_schema)
+        .key_schema(sk_schema)
+        .provisioned_throughput(
+            ProvisionedThroughput::builder()
+                .read_capacity_units(5)
+                .write_capacity_units(5)
+                .build(),
+        )
+        .projection(
+            Projection::builder()
+                .set_projection_type(Some(ProjectionType::All))
+                .build(),
+        )
+        .build()
+}
+
+fn build_request(request_str: &str, user_id: u32) -> Request {
+    let authenticated_user = AuthenticatedUser { id: user_id };
     let request: Request = request_str.into();
-    request.data(get_authenticated_user())
+    request.data(authenticated_user)
 }
