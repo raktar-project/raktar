@@ -1,9 +1,9 @@
 use async_graphql::{SimpleObject, ID};
 use semver::Version;
 
-use raktar::models::crate_details::CrateDetails;
-use raktar::models::metadata::Metadata;
-use raktar::models::token::TokenItem;
+use crate::models::crate_details::CrateDetails;
+use crate::models::metadata::Metadata;
+use crate::models::token::TokenItem;
 
 #[derive(SimpleObject)]
 pub struct CrateSummary {
