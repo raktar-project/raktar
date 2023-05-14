@@ -128,7 +128,7 @@ fn generate_random_key() -> String {
 }
 
 async fn build_repository() -> DynamoDBRepository {
-    let table_name = "test_table";
+    let table_name = &generate_random_key();
     let access_key = &generate_random_key();
 
     std::env::set_var("AWS_ACCESS_KEY_ID", access_key);
