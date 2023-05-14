@@ -1,19 +1,74 @@
+use async_graphql::{Name, Request, Value};
 use aws_sdk_dynamodb::types::{
     AttributeDefinition, KeySchemaElement, KeyType, ProvisionedThroughput, ScalarAttributeType,
 };
 use aws_sdk_dynamodb::Client;
+use raktar::graphql::handler::AuthenticatedUser;
 use raktar::graphql::schema::build_schema;
 use raktar::repository::{DynRepository, DynamoDBRepository};
 use rand::distributions::{Alphanumeric, DistString};
 use std::sync::Arc;
 
-fn generate_random_table_name() -> String {
+#[tokio::test]
+async fn test_token_generation() {
+    let repository = Arc::new(build_repository().await) as DynRepository;
+    let schema = build_schema(repository);
+
+    let mutation = "
+    mutation {
+      generateToken(name: \"test token\") {
+        id
+        key
+        token {
+          id
+          name
+        }
+      }
+    }";
+
+    let response = schema.execute(build_request(mutation)).await;
+
+    assert_eq!(response.errors.len(), 0);
+
+    let actual_name = extract_data(&response.data, &["generateToken", "token", "name"]);
+    let expected_name = Value::String("test token".to_string());
+    assert_eq!(actual_name, expected_name);
+
+    let key = extract_data(&response.data, &["generateToken", "key"]);
+    if let Value::String(k) = key {
+        assert_eq!(k.len(), 32);
+    } else {
+        panic!("the key is not a string");
+    }
+}
+
+fn extract_data(data: &Value, path: &[&str]) -> Value {
+    let mut actual = data.clone();
+    for p in path {
+        if let Value::Object(mut obj) = actual {
+            let key = Name::new(p);
+            actual = obj.remove(&key).expect("key to exist");
+        } else {
+            panic!("value at {} is not an object", p);
+        }
+    }
+
+    actual
+}
+
+fn generate_random_key() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 16)
 }
 
+fn get_authenticated_user() -> AuthenticatedUser {
+    AuthenticatedUser { id: 1 }
+}
+
 async fn build_repository() -> DynamoDBRepository {
-    let table_name = &generate_random_table_name();
-    std::env::set_var("AWS_ACCESS_KEY_ID", "test");
+    let table_name = "test_table";
+    let access_key = &generate_random_key();
+
+    std::env::set_var("AWS_ACCESS_KEY_ID", access_key);
     std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
     std::env::set_var("TABLE_NAME", table_name);
 
@@ -58,22 +113,7 @@ async fn build_repository() -> DynamoDBRepository {
     DynamoDBRepository::new(db_client)
 }
 
-#[tokio::test]
-async fn test_query() {
-    let repository = Arc::new(build_repository().await) as DynRepository;
-    let schema = build_schema(repository);
-
-    let mutation = "
-    mutation {
-      generateToken(name: \"test token\") {
-        id
-        key
-        token {
-          id
-          name
-        }
-      }
-    }";
-    let response = schema.execute(mutation).await;
-    assert_eq!(response.errors.len(), 1);
+fn build_request(request_str: &str) -> Request {
+    let request: Request = request_str.into();
+    request.data(get_authenticated_user())
 }
