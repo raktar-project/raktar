@@ -18,7 +18,7 @@ async fn build_repository() -> DynamoDBRepository {
     std::env::set_var("TABLE_NAME", table_name);
 
     let config = aws_config::from_env()
-        .endpoint_url("http://127.0.0.1:8000")
+        .endpoint_url("http://localhost:8000")
         .region("eu-west-1")
         .load()
         .await;

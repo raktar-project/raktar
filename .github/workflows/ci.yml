@@ -22,11 +22,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest"
+        ports:
+          - "8000:8000"
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
       - name: test
-        run: |
-          docker-compose up -d dynamodb-local
-          cargo test
-          docker-compose down
+        run: cargo test
