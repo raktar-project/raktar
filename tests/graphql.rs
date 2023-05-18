@@ -1,4 +1,4 @@
-use async_graphql::{Name, Request, Value};
+use async_graphql::{value, Name, Request, Value, Variables};
 use aws_sdk_dynamodb::types::{
     AttributeDefinition, GlobalSecondaryIndex, KeySchemaElement, KeyType, Projection,
     ProjectionType, ProvisionedThroughput, ScalarAttributeType,
@@ -109,6 +109,66 @@ async fn test_my_tokens() {
     }
 }
 
+#[tokio::test]
+async fn test_delete_token() {
+    let repository = Arc::new(build_repository().await) as DynRepository;
+    let schema = build_schema(repository);
+
+    let mutation = r#"
+    mutation {
+      generateToken(name: "test token") {
+        id
+        key
+        token {
+          id
+          name
+        }
+      }
+    }"#;
+
+    let response = schema.execute(build_request(mutation, 0)).await;
+    assert_eq!(response.errors.len(), 0);
+
+    let mutation = r#"
+    mutation {
+      generateToken(name: "test token 2") {
+        id
+        key
+        token {
+          id
+          name
+        }
+      }
+    }"#;
+    let response = schema.execute(build_request(mutation, 0)).await;
+    assert_eq!(response.errors.len(), 0);
+    let id = match extract_data(&response.data, &["generateToken", "id"]) {
+        Value::String(id) => id,
+        _ => panic!("id is not a string"),
+    };
+
+    let request = build_delete_token_request(0, id);
+    let response = schema.execute(request).await;
+    assert_eq!(response.errors.len(), 0);
+
+    let query = r#"
+    query {
+      myTokens {
+        name
+      }
+    }"#;
+    let response = schema.execute(build_request(query, 0)).await;
+    assert_eq!(response.errors.len(), 0);
+
+    // There should be one token after the delete
+    let tokens_data = extract_data(&response.data, &["myTokens"]);
+    if let Value::List(tokens) = tokens_data {
+        assert_eq!(tokens.len(), 1);
+    } else {
+        panic!("tokens is not a list");
+    }
+}
+
 fn extract_data(data: &Value, path: &[&str]) -> Value {
     let mut actual = data.clone();
     for p in path {
@@ -121,6 +181,25 @@ fn extract_data(data: &Value, path: &[&str]) -> Value {
     }
 
     actual
+}
+
+fn build_delete_token_request(user_id: u32, token_id: String) -> Request {
+    let mutation = r#"
+    mutation DeleteToken($tokenId: String!) {
+      deleteToken(tokenId: $tokenId) {
+        id
+      }
+    }
+    "#;
+    let variables = Variables::from_value(value!({ "tokenId": token_id }));
+
+    build_request(mutation, user_id).variables(variables)
+}
+
+fn build_request(request_str: &str, user_id: u32) -> Request {
+    let authenticated_user = AuthenticatedUser { id: user_id };
+    let request: Request = request_str.into();
+    request.data(authenticated_user)
 }
 
 fn generate_random_key() -> String {
@@ -209,10 +288,4 @@ fn build_user_data_gsi() -> GlobalSecondaryIndex {
                 .build(),
         )
         .build()
-}
-
-fn build_request(request_str: &str, user_id: u32) -> Request {
-    let authenticated_user = AuthenticatedUser { id: user_id };
-    let request: Request = request_str.into();
-    request.data(authenticated_user)
 }
