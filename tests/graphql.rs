@@ -16,19 +16,8 @@ async fn test_token_generation() {
     let repository = Arc::new(build_repository().await) as DynRepository;
     let schema = build_schema(repository);
 
-    let mutation = r#"
-    mutation {
-      generateToken(name: "test token") {
-        id
-        key
-        token {
-          id
-          name
-        }
-      }
-    }"#;
-
-    let response = schema.execute(build_request(mutation, 0)).await;
+    let request = build_generate_token_request(0, "test token");
+    let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
 
     let actual_name = extract_data(&response.data, &["generateToken", "token", "name"]);
@@ -48,49 +37,23 @@ async fn test_my_tokens() {
     let repository = Arc::new(build_repository().await) as DynRepository;
     let schema = build_schema(repository);
 
-    let mutation = r#"
-    mutation {
-      generateToken(name: "test token") {
-        id
-        key
-        token {
-          id
-          name
-        }
-      }
-    }"#;
-
-    // We create a new token for user 0
-    let response = schema.execute(build_request(mutation, 0)).await;
+    // We create a new token for user 10
+    let request = build_generate_token_request(10, "test token");
+    let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
 
-    // We create a new token with the same name for user 1
-    let response = schema.execute(build_request(mutation, 1)).await;
+    // We create a new token with the same name for user 11
+    let request = build_generate_token_request(11, "test token");
+    let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
 
-    // For user 1, we create another token
-    let mutation = r#"
-    mutation {
-      generateToken(name: "test token 2") {
-        id
-        key
-        token {
-          id
-          name
-        }
-      }
-    }"#;
-    let response = schema.execute(build_request(mutation, 1)).await;
+    // For user 11, we create another token
+    let request = build_generate_token_request(11, "test token 2");
+    let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
 
-    // We get the tokens for user 1
-    let query = r#"
-    query {
-      myTokens {
-        name
-      }
-    }"#;
-    let response = schema.execute(build_request(query, 1)).await;
+    // We get the tokens for user 11
+    let response = schema.execute(build_my_tokens_request(11)).await;
     assert_eq!(response.errors.len(), 0);
 
     // There should be two tokens
@@ -114,50 +77,23 @@ async fn test_delete_token() {
     let repository = Arc::new(build_repository().await) as DynRepository;
     let schema = build_schema(repository);
 
-    let mutation = r#"
-    mutation {
-      generateToken(name: "test token") {
-        id
-        key
-        token {
-          id
-          name
-        }
-      }
-    }"#;
-
-    let response = schema.execute(build_request(mutation, 0)).await;
+    let request = build_generate_token_request(20, "test token");
+    let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
 
-    let mutation = r#"
-    mutation {
-      generateToken(name: "test token 2") {
-        id
-        key
-        token {
-          id
-          name
-        }
-      }
-    }"#;
-    let response = schema.execute(build_request(mutation, 0)).await;
+    let request = build_generate_token_request(20, "test token 2");
+    let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
     let id = match extract_data(&response.data, &["generateToken", "id"]) {
         Value::String(id) => id,
         _ => panic!("id is not a string"),
     };
 
-    let request = build_delete_token_request(0, id);
+    let request = build_delete_token_request(20, id);
     let response = schema.execute(request).await;
     assert_eq!(response.errors.len(), 0);
 
-    let query = r#"
-    query {
-      myTokens {
-        name
-      }
-    }"#;
-    let response = schema.execute(build_request(query, 0)).await;
+    let response = schema.execute(build_my_tokens_request(20)).await;
     assert_eq!(response.errors.len(), 0);
 
     // There should be one token after the delete
@@ -183,6 +119,25 @@ fn extract_data(data: &Value, path: &[&str]) -> Value {
     actual
 }
 
+fn build_generate_token_request(user_id: u32, name: &str) -> Request {
+    let mutation = r#"
+    mutation GenerateToken($name: String!) {
+        generateToken(name: $name) {
+            id
+            token {
+                id
+                userId
+                name
+            }
+            key
+        }
+    }
+    "#;
+    let variables = Variables::from_value(value!({ "name": name }));
+
+    build_request(mutation, user_id).variables(variables)
+}
+
 fn build_delete_token_request(user_id: u32, token_id: String) -> Request {
     let mutation = r#"
     mutation DeleteToken($tokenId: String!) {
@@ -194,6 +149,16 @@ fn build_delete_token_request(user_id: u32, token_id: String) -> Request {
     let variables = Variables::from_value(value!({ "tokenId": token_id }));
 
     build_request(mutation, user_id).variables(variables)
+}
+
+fn build_my_tokens_request(user_id: u32) -> Request {
+    let query = r#"
+    query {
+      myTokens {
+        name
+      }
+    }"#;
+    build_request(query, user_id)
 }
 
 fn build_request(request_str: &str, user_id: u32) -> Request {
