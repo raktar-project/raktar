@@ -573,6 +573,7 @@ impl Repository for DynamoDBRepository {
             id: u32,
         }
 
+        // TODO: should we store down the name?
         let output = self
             .db_client
             .get_item()
