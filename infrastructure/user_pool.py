@@ -12,6 +12,7 @@ class RaktarUserPool(Construct):
         *,
         pre_token_trigger_function: Function,
         sso_metadata_url: str,
+        app_domain: str,
         cognito_domain_prefix: str,
     ) -> None:
         """Set up the user pool."""
@@ -22,7 +23,9 @@ class RaktarUserPool(Construct):
             self._user_pool, sso_metadata_url
         )
         self._user_pool_client = self._build_user_pool_client(
-            self._user_pool, self._sso_provider
+            self._user_pool,
+            self._sso_provider,
+            app_domain,
         )
         self._user_pool.add_domain(
             "CognitoDomain",
@@ -59,6 +62,7 @@ class RaktarUserPool(Construct):
         self,
         user_pool: cognito.UserPool,
         sso_provider: cognito.UserPoolIdentityProviderSaml,
+        app_domain: str,
     ) -> cognito.UserPoolClient:
         provider = cognito.UserPoolClientIdentityProvider.custom(
             sso_provider.provider_name
@@ -68,6 +72,12 @@ class RaktarUserPool(Construct):
             "CognitoClient",
             user_pool=user_pool,
             supported_identity_providers=[provider],
+            o_auth=cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(authorization_code_grant=True),
+                scopes=[cognito.OAuthScope.OPENID],
+                callback_urls=[f"https://{app_domain}/cb", "http://localhost/cb"],
+                logout_urls=[f"https://{app_domain}/", "http://localhost"],
+            ),
         )
 
     def _build_identity_provider(

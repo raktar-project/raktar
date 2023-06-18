@@ -53,6 +53,7 @@ class RaktarStack(Stack):
             "RaktarUserPool",
             pre_token_trigger_function=pre_token_function.function,
             sso_metadata_url=settings.sso_metadata_url,
+            app_domain=settings.app_domain,
             cognito_domain_prefix=settings.cognito_domain_prefix,
         )
         table.grant_read_write_data(backend_function.function)

@@ -3,6 +3,7 @@ from pydantic import BaseSettings
 
 class Settings(BaseSettings):
     domain_name: str
+    app_domain: str
     hosted_zone_domain_name: str
     sso_metadata_url: str
     cognito_domain_prefix: str
