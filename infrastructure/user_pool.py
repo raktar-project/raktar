@@ -1,4 +1,5 @@
 import aws_cdk.aws_cognito as cognito
+from aws_cdk import CfnOutput
 from aws_cdk.aws_lambda import Function
 from constructs import Construct
 
@@ -10,7 +11,8 @@ class RaktarUserPool(Construct):
         construct_id: str,
         *,
         pre_token_trigger_function: Function,
-        sso_metadata_url: str
+        sso_metadata_url: str,
+        cognito_domain_prefix: str,
     ) -> None:
         """Set up the user pool."""
         super().__init__(scope, construct_id)
@@ -22,6 +24,14 @@ class RaktarUserPool(Construct):
         self._user_pool_client = self._build_user_pool_client(
             self._user_pool, self._sso_provider
         )
+        self._user_pool.add_domain(
+            "CognitoDomain",
+            cognito_domain=cognito.CognitoDomainOptions(
+                domain_prefix=cognito_domain_prefix
+            ),
+        )
+        domain = f"https://{cognito_domain_prefix}.auth.{self._user_pool.stack.region}.amazoncognito.com"
+        CfnOutput(self, "CognitoDomainOutput", value=domain)
 
     @property
     def user_pool_id(self) -> str:
