@@ -38,10 +38,11 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
                             Ok(user) => {
                                 info!(login, id = user.id, "adding extra claims for user");
                                 let response = Response::new(user.id);
+                                let response_value = to_value(response)?;
                                 event
                                     .as_object_mut()
                                     .expect("the trigger event to be an object")
-                                    .insert("response".to_string(), to_value(response).unwrap());
+                                    .insert("response".to_string(), response_value);
                             }
                             Err(err) => {
                                 error!("failed to get user: {}", err);
