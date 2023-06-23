@@ -70,8 +70,8 @@ fn parse_token(token: &str) -> Result<Claims> {
     if let (Some(_), Some(payload), Some(_), None) =
         (parts.next(), parts.next(), parts.next(), parts.next())
     {
-        let decoded = URL_SAFE_NO_PAD.decode(payload).unwrap();
-        let claims = serde_json::from_slice::<Claims>(&decoded).unwrap();
+        let decoded = URL_SAFE_NO_PAD.decode(payload)?;
+        let claims = serde_json::from_slice::<Claims>(&decoded)?;
         Ok(claims)
     } else {
         bail!("failed to parse token");
