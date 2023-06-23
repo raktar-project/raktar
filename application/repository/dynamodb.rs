@@ -87,7 +87,7 @@ impl DynamoDBRepository {
         crate_details: CrateDetails,
         is_new: bool,
     ) -> AppResult<()> {
-        let item = to_item(crate_details).unwrap();
+        let item = to_item(crate_details)?;
         // TODO: when it's not new, this should probably verify we're not overwriting a competing write
         let condition_expression = if is_new {
             Some("attribute_not_exists(sk)".to_string())
@@ -106,7 +106,7 @@ impl DynamoDBRepository {
         // TODO: fix unwrap
         let pk = DynamoDBRepository::get_package_key(&package_info.name);
         let sk = DynamoDBRepository::get_package_version_key(&package_info.vers);
-        let item = to_item(package_info).unwrap();
+        let item = to_item(package_info)?;
         let put = Put::builder()
             .table_name(&self.table_name)
             .set_item(Some(item))
@@ -150,7 +150,7 @@ impl DynamoDBRepository {
         let pk = DynamoDBRepository::get_package_key(&package_info.name);
         let sk = DynamoDBRepository::get_package_version_key(&package_info.vers);
 
-        let item = to_item(package_info).unwrap();
+        let item = to_item(package_info)?;
         match self
             .db_client
             .put_item()

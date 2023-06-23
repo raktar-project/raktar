@@ -3,6 +3,7 @@ use aws_sdk_dynamodb::Client;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::{to_value, Value};
+use tokio::sync::OnceCell;
 use tracing::{error, info, Level};
 
 use raktar::repository::{DynamoDBRepository, Repository};
@@ -21,10 +22,9 @@ async fn main() -> Result<(), Error> {
 async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     let (mut event, _context) = event.into_parts();
 
-    // TODO: these should be cached between invocations
-    let aws_config = aws_config::from_env().load().await;
-    let db_client = Client::new(&aws_config);
-    let repository = DynamoDBRepository::new(db_client);
+    let repository = DYNAMODB_REPOSITORY
+        .get_or_init(get_dynamodb_repository)
+        .await;
 
     info!("pre-token triggered: {}", event);
     match serde_json::from_value::<TriggerEvent>(event.clone()) {
@@ -38,10 +38,11 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
                             Ok(user) => {
                                 info!(login, id = user.id, "adding extra claims for user");
                                 let response = Response::new(user.id);
+                                let response_value = to_value(response)?;
                                 event
                                     .as_object_mut()
                                     .expect("the trigger event to be an object")
-                                    .insert("response".to_string(), to_value(response).unwrap());
+                                    .insert("response".to_string(), response_value);
                             }
                             Err(err) => {
                                 error!("failed to get user: {}", err);
@@ -68,6 +69,14 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     }
 
     Ok(event)
+}
+
+static DYNAMODB_REPOSITORY: OnceCell<DynamoDBRepository> = OnceCell::const_new();
+
+async fn get_dynamodb_repository() -> DynamoDBRepository {
+    let aws_config = aws_config::from_env().load().await;
+    let db_client = Client::new(&aws_config);
+    DynamoDBRepository::new(db_client)
 }
 
 #[derive(Clone, Debug, Serialize)]
