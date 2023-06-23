@@ -25,7 +25,7 @@ pub enum AppError {
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
     #[error("unexpected error")]
-    Other,
+    Other(String),
 }
 
 impl IntoResponse for AppError {
@@ -36,7 +36,7 @@ impl IntoResponse for AppError {
             AppError::NonExistentCrateVersion { .. } => StatusCode::NOT_FOUND,
             AppError::DuplicateCrateVersion { .. } => StatusCode::BAD_REQUEST,
             AppError::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::Other => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Other(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         let payload = json!({ "errors": [{ "detail": detail }] });
@@ -49,7 +49,7 @@ impl<E> From<SdkError<E>> for AppError {
         let error_message = format!("{}", err);
         let error_type = "aws_sdk".to_string();
         error!(error_message, error_type, "unexpected error");
-        Self::Other
+        Self::Other(error_message)
     }
 }
 
@@ -58,7 +58,7 @@ impl From<serde_dynamo::Error> for AppError {
         let error_message = format!("{}", err);
         let error_type = "serde_dynamo".to_string();
         error!(error_message, error_type, "unexpected error");
-        Self::Other
+        Self::Other(error_message)
     }
 }
 

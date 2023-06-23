@@ -231,7 +231,7 @@ impl DynamoDBRepository {
             .build();
         let put_user_item = TransactWriteItem::builder().put(put).build();
 
-        Ok(self
+        let user = self
             .db_client
             .transact_write_items()
             .transact_items(put_login_mapping_item)
@@ -242,7 +242,9 @@ impl DynamoDBRepository {
                 login: login.to_string(),
                 id: user_id,
                 name: None,
-            })?)
+            })?;
+
+        Ok(user)
     }
 
     async fn find_next_user_id(&self) -> AppResult<u32> {
@@ -384,8 +386,7 @@ impl Repository for DynamoDBRepository {
     }
 
     async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()> {
-        Ok(self
-            .db_client
+        self.db_client
             .update_item()
             .table_name(&self.table_name)
             .set_key(self.get_crate_info_key(crate_name.to_string()))
@@ -394,8 +395,9 @@ impl Repository for DynamoDBRepository {
             .expression_attribute_values(":new_owners", AttributeValue::Ss(user_ids))
             .return_values(ReturnValue::UpdatedOld)
             .send()
-            .await
-            .map(|_| ())?)
+            .await?;
+
+        Ok(())
     }
 
     async fn get_crate_details(&self, crate_name: &str) -> AppResult<CrateDetails> {

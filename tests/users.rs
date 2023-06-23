@@ -2,8 +2,10 @@ mod common;
 
 use common::setup::build_repository;
 use raktar::repository::Repository;
+use tracing_test::traced_test;
 
 #[tokio::test]
+#[traced_test]
 async fn test_users_are_not_recreated() {
     let repository = build_repository().await;
 
@@ -15,6 +17,7 @@ async fn test_users_are_not_recreated() {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn test_user_ids_are_incremented() {
     let repository = build_repository().await;
 
