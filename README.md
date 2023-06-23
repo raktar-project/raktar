@@ -1,6 +1,8 @@
 <div align="center">
   
 # Raktar
+
+[![CI](https://github.com/raktar-registry/raktar/actions/workflows/ci.yml/badge.svg)](https://github.com/raktar-registry/raktar/actions/workflows/ci.yml)
   
 **A serverless alternative registry for Rust.**
   
