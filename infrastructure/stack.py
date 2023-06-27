@@ -36,7 +36,7 @@ class RaktarStack(Stack):
             environment_variables={
                 "TABLE_NAME": table.table_name,
                 "CRATES_BUCKET_NAME": bucket.bucket_name,
-                "DOMAIN_NAME": settings.domain_name,
+                "DOMAIN_NAME": settings.api_domain,
             },
         )
         pre_token_function = RustFunction(

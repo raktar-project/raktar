@@ -52,7 +52,7 @@ class WebApi(Construct):
         certificate = acm.Certificate(
             self,
             "APICertificate",
-            domain_name=settings.domain_name,
+            domain_name=settings.api_domain,
             validation=acm.CertificateValidation.from_dns(hosted_zone),
         )
 
@@ -61,7 +61,7 @@ class WebApi(Construct):
             client_id=user_pool.user_pool_client_id,
         )
 
-        custom_domain = self.create_custom_domain(settings.domain_name, certificate)
+        custom_domain = self.create_custom_domain(settings.api_domain, certificate)
         http_api = self.build_http_api(api_name=api_name, custom_domain=custom_domain)
         self.setup_lambda_integration(http_api, api_lambda, authorizer=authorizer)
 
@@ -73,11 +73,11 @@ class WebApi(Construct):
             self,
             "AliasRecord",
             zone=hosted_zone,
-            record_name=settings.domain_name,
+            record_name=settings.api_domain,
             target=route53.RecordTarget.from_alias(target),
         )
 
-        CfnOutput(self, "ApiUrl", value=f"https://{settings.domain_name}/")
+        CfnOutput(self, "ApiUrl", value=f"https://{settings.api_domain}/")
 
     @staticmethod
     def setup_lambda_integration(
