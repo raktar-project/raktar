@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use aws_smithy_http::result::SdkError;
+use aws_smithy_http::result::{CreateUnhandledError, SdkError};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -44,9 +44,11 @@ impl IntoResponse for AppError {
     }
 }
 
-impl<E> From<SdkError<E>> for AppError {
+impl<E: std::error::Error + Send + Sync + CreateUnhandledError + 'static> From<SdkError<E>>
+    for AppError
+{
     fn from(err: SdkError<E>) -> Self {
-        let error_message = format!("{}", err);
+        let error_message = format!("{}", err.into_service_error());
         let error_type = "aws_sdk".to_string();
         error!(error_message, error_type, "unexpected error");
         Self::Other(error_message)
