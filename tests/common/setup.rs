@@ -5,6 +5,7 @@ use aws_sdk_dynamodb::types::{
 use aws_sdk_dynamodb::Client;
 use raktar::repository::DynamoDBRepository;
 use rand::distributions::{Alphanumeric, DistString};
+use std::time::Duration;
 
 fn generate_random_key() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 16)
@@ -63,7 +64,30 @@ pub async fn build_repository() -> DynamoDBRepository {
         .send()
         .await
         .expect("to be able to create table");
+
+    wait_for_table(&db_client, table_name).await;
+
     DynamoDBRepository::new(db_client)
+}
+
+async fn wait_for_table(db_client: &Client, table_name: &str) {
+    for _ in 0..50 {
+        let output = db_client
+            .describe_table()
+            .table_name(table_name)
+            .send()
+            .await
+            .unwrap();
+
+        let status = output.table().unwrap().table_status().unwrap();
+        if *status == aws_sdk_dynamodb::types::TableStatus::Active {
+            return;
+        } else {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    panic!("dynamodb table never reached Active status");
 }
 
 fn build_user_data_gsi() -> GlobalSecondaryIndex {
