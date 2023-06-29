@@ -1,18 +1,35 @@
-"""Rust-based Lambda stuff."""
+"""Lambda construct for Rust."""
 import subprocess
+from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional
 
 import aws_cdk.aws_ec2 as ec2
 from aws_cdk.aws_iam import Role
-from aws_cdk.aws_lambda import Architecture, Code, Function, Runtime
+from aws_cdk.aws_lambda import Architecture as LambdaArchitecture
+from aws_cdk.aws_lambda import Code, Function, Runtime
 from constructs import Construct
 
 _LAMBDA_DIR = "target/lambda/cdk"
 
 
-class RustFunction(Construct):
-    """Rust-based Lambda function wrapper."""
+class Architecture(Enum):
+    """Architectures supported by Rust Lambdas."""
+
+    ARM_64 = 1
+    X86_64 = 2
+
+    def as_lambda_architecture(self) -> LambdaArchitecture:
+        mapping = {
+            self.ARM_64: LambdaArchitecture.ARM_64,
+            self.X86_64: LambdaArchitecture.X86_64,
+        }
+
+        return mapping[self]
+
+
+class RustFunction(Function):
+    """Rust-based Lambda function."""
 
     def __init__(
         self,
@@ -27,33 +44,27 @@ class RustFunction(Construct):
         vpc: Optional[ec2.Vpc] = None,
     ):
         """Create a Rust function for a binary package."""
-        super().__init__(scope, f"{construct_id}Wrapper")
 
         _compile_lambda(bin_name, architecture)
         code_path = Path(_LAMBDA_DIR) / bin_name / "bootstrap.zip"
 
-        self._function = Function(
-            self,
+        super().__init__(
+            scope,
             construct_id,
             function_name=bin_name,
             description=description,
             handler="doesnt.matter",
             runtime=Runtime.PROVIDED_AL2,
-            architecture=Architecture.ARM_64,
+            architecture=architecture.as_lambda_architecture(),
             code=Code.from_asset(code_path.as_posix()),
             environment=environment_variables,
             role=role,
             vpc=vpc,
         )
 
-    @property
-    def function(self):
-        """The wrapped Lambda function."""
-        return self._function
-
 
 def _compile_lambda(bin_name: str, architecture: Architecture):
-    arch = "--arm64" if architecture.ARM_64 else "--x86-64"
+    arch = "--arm64" if architecture == Architecture.ARM_64 else "--x86-64"
     command = [
         "cargo",
         "lambda",
