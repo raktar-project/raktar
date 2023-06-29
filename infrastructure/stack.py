@@ -70,4 +70,5 @@ class RaktarStack(Stack):
         )
 
     def create_s3_bucket(self) -> s3.Bucket:
+        """Create the S3 bucket where crates data will be stored."""
         return s3.Bucket(self, "CratesBucket")

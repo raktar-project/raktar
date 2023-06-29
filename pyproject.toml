@@ -22,6 +22,26 @@ aws-cdk-aws-apigatewayv2-authorizers-alpha = "^2.73.0a0"
 pydantic = { version = "^1.10.7", extras = ["dotenv"] }
 ziglang = "^0.10.0.post1"
 
+[tool.ruff]
+select = ["A", "B", "D", "E", "F", "N"]
+ignore = [
+    "D203",
+    "D213",
+]
+
+exclude = [
+    "application",
+    ".venv",
+    "cdk.out",
+    ".git",
+    ".ruff_cache"
+]
+
+[tool.mypy]
+ignore_missing_imports = false
+disallow_untyped_defs = true
+explicit_package_bases = true
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
