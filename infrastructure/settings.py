@@ -10,12 +10,12 @@ class Settings(BaseSettings):
     cognito_domain_prefix: str
 
     @property
-    def app_domain(self):
+    def app_domain(self) -> str:
         """The domain where the frontend app is hosted."""
         return f"crates.{self.hosted_zone_domain_name}"
 
     @property
-    def api_domain(self):
+    def api_domain(self) -> str:
         """The domain where the API is served."""
         return f"api.{self.app_domain}"
 

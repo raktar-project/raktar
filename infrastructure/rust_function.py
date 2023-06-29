@@ -22,8 +22,8 @@ class Architecture(Enum):
     def as_lambda_architecture(self) -> LambdaArchitecture:
         """Convert this architecture to a Lambda architecture object."""
         mapping = {
-            self.ARM_64: LambdaArchitecture.ARM_64,
-            self.X86_64: LambdaArchitecture.X86_64,
+            Architecture.ARM_64: LambdaArchitecture.ARM_64,
+            Architecture.X86_64: LambdaArchitecture.X86_64,
         }
 
         return mapping[self]
@@ -63,7 +63,7 @@ class RustFunction(Function):
         )
 
 
-def _compile_lambda(bin_name: str, architecture: Architecture):
+def _compile_lambda(bin_name: str, architecture: Architecture) -> None:
     arch = "--arm64" if architecture == Architecture.ARM_64 else "--x86-64"
     command = [
         "cargo",
