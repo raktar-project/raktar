@@ -130,11 +130,13 @@ class WebApi(Construct):
         domain_name: str,
         certificate: acm.Certificate,
     ) -> DomainName:
+        """Create a custom domain for the API gateway."""
         return DomainName(
             self, "APIDomainName", domain_name=domain_name, certificate=certificate
         )
 
     def get_hosted_zone(self, settings: Settings) -> route53.IHostedZone:
+        """Get the hosted zone where the record routing to the API will be created."""
         return route53.HostedZone.from_lookup(
             self,
             "HostedZone",
@@ -142,6 +144,7 @@ class WebApi(Construct):
         )
 
     def build_http_authorizer(self, pool_id: str, client_id: str) -> HttpJwtAuthorizer:
+        """Build the JWT authorizer for the API."""
         issuer = f"https://cognito-idp.{Stack.of(self).region}.amazonaws.com/{pool_id}"
 
         return HttpJwtAuthorizer(

@@ -1,9 +1,13 @@
+"""Infrastructure code for DynamoDB."""
 import aws_cdk.aws_dynamodb as dynamodb
 from constructs import Construct
 
 
 class Database(Construct):
+    """The database for application data."""
+
     def __init__(self, scope: Construct, construct_id: str):
+        """Create the DynamoDB infrastructure."""
         super().__init__(scope, construct_id)
 
         self._table = self.create_database_table()
@@ -11,9 +15,11 @@ class Database(Construct):
 
     @property
     def table(self) -> dynamodb.Table:
+        """The DynamoDB table."""
         return self._table
 
     def create_database_table(self) -> dynamodb.Table:
+        """Create the DynamoDB table that will host application data."""
         return dynamodb.Table(
             self,
             "RegistryTable",

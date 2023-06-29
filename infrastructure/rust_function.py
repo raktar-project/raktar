@@ -20,6 +20,7 @@ class Architecture(Enum):
     X86_64 = 2
 
     def as_lambda_architecture(self) -> LambdaArchitecture:
+        """Convert this architecture to a Lambda architecture object."""
         mapping = {
             self.ARM_64: LambdaArchitecture.ARM_64,
             self.X86_64: LambdaArchitecture.X86_64,
@@ -44,7 +45,6 @@ class RustFunction(Function):
         vpc: Optional[ec2.Vpc] = None,
     ):
         """Create a Rust function for a binary package."""
-
         _compile_lambda(bin_name, architecture)
         code_path = Path(_LAMBDA_DIR) / bin_name / "bootstrap.zip"
 

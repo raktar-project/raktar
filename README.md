@@ -1,11 +1,11 @@
 <div align="center">
-  
+
 # Raktar
 
 [![CI](https://github.com/raktar-registry/raktar/actions/workflows/ci.yml/badge.svg)](https://github.com/raktar-registry/raktar/actions/workflows/ci.yml)
-  
+
 **A serverless alternative registry for Rust.**
-  
+
 </div>
 
 `raktar` is an alternative registry for Rust leveraging serverless AWS components.
@@ -24,7 +24,7 @@ flag will be stabilised.
 >
 > This application is work in progress. The key APIs work, allowing you to publish crates, query the index, download crates, yank and unyank versions.
 > The Raktar registry is meant to be used in conjunction with the [Raktar app](https://github.com/raktar-registry/raktar-app/).
-> 
+>
 > At this stage, Raktar aims to provide a good experience for a very specific setup. It makes a lot of assumption, for example that you'll authenticate using
 > AWS Cognito using AWS IAM Identity Center (AWS SSO) as the identity provider.
 

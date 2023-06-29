@@ -1,7 +1,10 @@
+"""Infrastructure settings."""
 from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):
+    """Settings required for the infrastructure code."""
+
     hosted_zone_domain_name: str
     sso_metadata_url: str
     cognito_domain_prefix: str
@@ -17,5 +20,7 @@ class Settings(BaseSettings):
         return f"api.{self.app_domain}"
 
     class Config:
+        """Config for the settings."""
+
         env_file = "infrastructure/.env"
         env_file_encoding = "utf-8"

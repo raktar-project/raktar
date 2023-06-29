@@ -1,3 +1,4 @@
+"""Cognito infrastructure."""
 import aws_cdk.aws_cognito as cognito
 from aws_cdk import CfnOutput
 from aws_cdk.aws_lambda import Function
@@ -5,6 +6,8 @@ from constructs import Construct
 
 
 class RaktarUserPool(Construct):
+    """The Cognito user pool that hosts users."""
+
     def __init__(
         self,
         scope: Construct,
@@ -38,10 +41,12 @@ class RaktarUserPool(Construct):
 
     @property
     def user_pool_id(self) -> str:
+        """The ID of the user pool."""
         return self._user_pool.user_pool_id
 
     @property
     def user_pool_client_id(self) -> str:
+        """The ID of the application client."""
         return self._user_pool_client.user_pool_client_id
 
     def _build_user_pool(
