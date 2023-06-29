@@ -51,20 +51,20 @@ class RaktarStack(Stack):
         user_pool = RaktarUserPool(
             self,
             "RaktarUserPool",
-            pre_token_trigger_function=pre_token_function.function,
+            pre_token_trigger_function=pre_token_function,
             sso_metadata_url=settings.sso_metadata_url,
             app_domain=settings.app_domain,
             cognito_domain_prefix=settings.cognito_domain_prefix,
         )
-        table.grant_read_write_data(backend_function.function)
-        table.grant_read_write_data(pre_token_function.function)
-        bucket.grant_read_write(backend_function.function)
+        table.grant_read_write_data(backend_function)
+        table.grant_read_write_data(pre_token_function)
+        bucket.grant_read_write(backend_function)
 
         WebApi(
             self,
             "Api",
             api_name="raktar-web",
-            api_lambda=backend_function.function,
+            api_lambda=backend_function,
             settings=settings,
             user_pool=user_pool,
         )
