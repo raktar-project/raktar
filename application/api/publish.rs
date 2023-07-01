@@ -1,6 +1,6 @@
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::Json;
+use axum::{Extension, Json};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hex::ToHex;
 use serde::Serialize;
@@ -9,6 +9,7 @@ use std::io::{Cursor, Read};
 use tracing::info;
 
 use crate::AppState;
+use raktar::auth::AuthenticatedUser;
 use raktar::error::AppResult;
 use raktar::models::index::PackageInfo;
 use raktar::models::metadata::Metadata;
@@ -21,6 +22,7 @@ pub struct PublishResponse {
 }
 
 pub async fn publish_crate(
+    Extension(authenticated_user): Extension<AuthenticatedUser>,
     State((repository, storage)): State<AppState>,
     body: Bytes,
 ) -> AppResult<Json<PublishResponse>> {
@@ -34,7 +36,13 @@ pub async fn publish_crate(
     let package_info = PackageInfo::from_metadata(metadata.clone(), &checksum);
 
     repository
-        .store_package_info(&crate_name, &vers, package_info, metadata)
+        .store_package_info(
+            &crate_name,
+            &vers,
+            package_info,
+            metadata,
+            &authenticated_user,
+        )
         .await?;
     storage.store_crate(&crate_name, vers, crate_bytes).await?;
 

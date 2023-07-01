@@ -2,7 +2,7 @@ mod common;
 
 use async_graphql::{value, Name, Request, Value, Variables};
 use common::setup::build_repository;
-use raktar::graphql::handler::AuthenticatedUser;
+use raktar::auth::AuthenticatedUser;
 use raktar::graphql::schema::build_schema;
 use raktar::repository::DynRepository;
 use std::collections::HashSet;
