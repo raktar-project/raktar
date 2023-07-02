@@ -1,31 +1,84 @@
-use async_graphql::{SimpleObject, ID};
-use semver::Version;
+use async_graphql::{ComplexObject, Context, Result, SimpleObject, ID};
+use futures::future::try_join_all;
 
-use crate::models::crate_details::CrateDetails;
+use crate::models::crate_summary::CrateSummary as CrateSummaryModel;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
+use crate::models::user::User as UserModel;
+use crate::repository::DynRepository;
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub struct CrateSummary {
     id: ID,
     name: String,
     max_version: String,
     description: String,
+    #[graphql(skip)]
+    owner_ids: Vec<u32>,
 }
 
-impl From<CrateDetails> for CrateSummary {
-    fn from(details: CrateDetails) -> Self {
+#[ComplexObject]
+impl CrateSummary {
+    async fn owners(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
+        let repository = ctx.data::<DynRepository>()?;
+
+        let queries: Vec<_> = self
+            .owner_ids
+            .iter()
+            .map(|id| repository.get_user_by_id(*id))
+            .collect();
+
+        let res = try_join_all(queries).await?;
+        let users: Vec<_> = res.into_iter().flatten().map(|u| u.into()).collect();
+
+        Ok(users)
+    }
+
+    async fn versions(&self, ctx: &Context<'_>) -> Result<Vec<String>> {
+        let repository = ctx.data::<DynRepository>()?;
+
+        let versions = repository
+            .list_crate_versions(&self.name)
+            .await?
+            .into_iter()
+            .map(|v| v.to_string())
+            .collect();
+
+        Ok(versions)
+    }
+}
+
+impl From<CrateSummaryModel> for CrateSummary {
+    fn from(value: CrateSummaryModel) -> Self {
         Self {
-            id: details.name.clone().into(),
-            name: details.name,
-            max_version: details.max_version.to_string(),
-            description: details.description,
+            id: value.name.clone().into(),
+            name: value.name,
+            max_version: value.max_version.to_string(),
+            description: value.description,
+            owner_ids: value.owners,
         }
     }
 }
 
 #[derive(SimpleObject)]
-pub struct Crate {
+pub struct User {
+    id: ID,
+    login: String,
+}
+
+impl From<UserModel> for User {
+    fn from(value: UserModel) -> Self {
+        Self {
+            id: value.id.into(),
+            login: value.login,
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub struct CrateVersion {
     id: ID,
     name: String,
     version: String,
@@ -35,12 +88,10 @@ pub struct Crate {
     keywords: Vec<String>,
     categories: Vec<String>,
     repository: Option<String>,
-    all_versions: Vec<String>,
 }
 
-impl Crate {
-    pub(crate) fn new(metadata: Metadata, versions: Vec<Version>) -> Self {
-        let all_versions = versions.into_iter().map(|v| v.to_string()).collect();
+impl From<Metadata> for CrateVersion {
+    fn from(metadata: Metadata) -> Self {
         Self {
             id: format!("{}-{}", &metadata.name, &metadata.vers).into(),
             name: metadata.name,
@@ -51,8 +102,18 @@ impl Crate {
             keywords: metadata.keywords,
             categories: metadata.categories,
             repository: metadata.repository.map(From::from),
-            all_versions,
         }
+    }
+}
+
+#[ComplexObject]
+impl CrateVersion {
+    #[graphql(name = "crate")]
+    async fn get_crate(&self, ctx: &Context<'_>) -> Result<CrateSummary> {
+        let repository = ctx.data::<DynRepository>()?;
+        let crate_summary = repository.get_crate_summary(&self.name).await?;
+
+        Ok(crate_summary.into())
     }
 }
 
