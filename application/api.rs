@@ -1,17 +1,10 @@
-mod config;
-mod download;
-mod index;
-mod owners;
-mod publish;
-mod unyank;
-mod yank;
-
-use axum::routing::{delete, get, put, Router};
-use axum::Extension;
-use raktar::auth::token_authenticator;
-use raktar::graphql::handler::{graphiql, graphql_handler};
-use raktar::graphql::schema::build_schema;
-use raktar::repository::DynRepository;
+pub mod config;
+pub mod download;
+pub mod index;
+pub mod owners;
+pub mod publish;
+pub mod unyank;
+pub mod yank;
 
 use crate::api::config::get_config_json;
 use crate::api::download::download_crate;
@@ -19,11 +12,18 @@ use crate::api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
 use crate::api::owners::{add_owners, list_owners};
-use crate::api::publish::publish_crate;
+use crate::api::publish::publish_crate_handler;
 use crate::api::unyank::unyank;
 use crate::api::yank::yank;
+use crate::auth::token_authenticator;
+use crate::graphql::handler::{graphiql, graphql_handler};
+use crate::graphql::schema::build_schema;
+use crate::repository::DynRepository;
 use crate::storage::DynCrateStorage;
-use crate::AppState;
+use axum::routing::{delete, get, put, Router};
+use axum::Extension;
+
+pub type AppState = (DynRepository, DynCrateStorage);
 
 pub fn build_router(repository: DynRepository, storage: DynCrateStorage) -> Router {
     let core_router = build_core_router(repository.clone());
@@ -39,7 +39,7 @@ pub fn build_router(repository: DynRepository, storage: DynCrateStorage) -> Rout
 
 fn build_core_router(repository: DynRepository) -> Router<AppState> {
     Router::new()
-        .route("/api/v1/crates/new", put(publish_crate))
+        .route("/api/v1/crates/new", put(publish_crate_handler))
         .route(
             "/api/v1/crates/:crate_name/owners",
             get(list_owners).put(add_owners),

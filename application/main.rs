@@ -1,16 +1,10 @@
-mod api;
-pub mod storage;
-
 use std::sync::Arc;
 
 use aws_sdk_dynamodb::Client;
 use axum::Router;
+use raktar::api::build_router;
 use raktar::repository::{DynRepository, DynamoDBRepository};
-
-use crate::api::build_router;
-use crate::storage::{DynCrateStorage, S3Storage};
-
-pub type AppState = (DynRepository, DynCrateStorage);
+use raktar::storage::{DynCrateStorage, S3Storage};
 
 #[tokio::main]
 async fn main() {

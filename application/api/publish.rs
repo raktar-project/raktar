@@ -8,11 +8,13 @@ use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 use tracing::info;
 
-use crate::AppState;
-use raktar::auth::AuthenticatedUser;
-use raktar::error::AppResult;
-use raktar::models::index::PackageInfo;
-use raktar::models::metadata::Metadata;
+use crate::api::AppState;
+use crate::auth::AuthenticatedUser;
+use crate::error::AppResult;
+use crate::models::index::PackageInfo;
+use crate::models::metadata::Metadata;
+use crate::repository::DynRepository;
+use crate::storage::DynCrateStorage;
 
 #[derive(Serialize)]
 pub struct PublishResponse {
@@ -21,12 +23,29 @@ pub struct PublishResponse {
     other: Vec<String>,
 }
 
-pub async fn publish_crate(
+pub async fn publish_crate_handler(
     Extension(authenticated_user): Extension<AuthenticatedUser>,
     State((repository, storage)): State<AppState>,
     body: Bytes,
 ) -> AppResult<Json<PublishResponse>> {
-    let (metadata_bytes, crate_bytes) = read_body(body);
+    info!("publish bytes: {:?}", body);
+
+    publish_crate(authenticated_user, storage, repository, body).await?;
+
+    Ok(Json(PublishResponse {
+        invalid_categories: vec![],
+        invalid_badges: vec![],
+        other: vec![],
+    }))
+}
+
+pub async fn publish_crate(
+    authenticated_user: AuthenticatedUser,
+    storage: DynCrateStorage,
+    repository: DynRepository,
+    data: Bytes,
+) -> AppResult<()> {
+    let (metadata_bytes, crate_bytes) = read_body(data);
     let metadata = serde_json::from_slice::<Metadata>(&metadata_bytes).unwrap();
 
     info!("metadata: {}", serde_json::to_string(&metadata).unwrap());
@@ -46,11 +65,7 @@ pub async fn publish_crate(
         .await?;
     storage.store_crate(&crate_name, vers, crate_bytes).await?;
 
-    Ok(Json(PublishResponse {
-        invalid_categories: vec![],
-        invalid_badges: vec![],
-        other: vec![],
-    }))
+    Ok(())
 }
 
 fn read_body(body: Bytes) -> (Vec<u8>, Vec<u8>) {
