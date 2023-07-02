@@ -611,6 +611,7 @@ impl Repository for DynamoDBRepository {
             .send()
             .await?;
 
+        // TODO: this has a race condition where two processes can both think the user doesn't exist yet
         match output.item().cloned() {
             None => {
                 info!("user not found, creating new user");
