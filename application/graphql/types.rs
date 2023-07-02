@@ -1,9 +1,12 @@
-use async_graphql::{SimpleObject, ID};
+use async_graphql::{ComplexObject, Context, Result, SimpleObject, ID};
+use futures::future::try_join_all;
 use semver::Version;
 
-use crate::models::crate_details::CrateDetails;
+use crate::models::crate_summary::CrateSummary as CrateSummaryModel;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
+use crate::models::user::User as UserModel;
+use crate::repository::DynRepository;
 
 #[derive(SimpleObject)]
 pub struct CrateSummary {
@@ -13,18 +16,34 @@ pub struct CrateSummary {
     description: String,
 }
 
-impl From<CrateDetails> for CrateSummary {
-    fn from(details: CrateDetails) -> Self {
+impl From<CrateSummaryModel> for CrateSummary {
+    fn from(value: CrateSummaryModel) -> Self {
         Self {
-            id: details.name.clone().into(),
-            name: details.name,
-            max_version: details.max_version.to_string(),
-            description: details.description,
+            id: value.name.clone().into(),
+            name: value.name,
+            max_version: value.max_version.to_string(),
+            description: value.description,
         }
     }
 }
 
 #[derive(SimpleObject)]
+pub struct User {
+    id: ID,
+    login: String,
+}
+
+impl From<UserModel> for User {
+    fn from(value: UserModel) -> Self {
+        Self {
+            id: value.id.into(),
+            login: value.login,
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+#[graphql(complex)]
 pub struct Crate {
     id: ID,
     name: String,
@@ -36,10 +55,14 @@ pub struct Crate {
     categories: Vec<String>,
     repository: Option<String>,
     all_versions: Vec<String>,
+    #[graphql(skip)]
+    owner_ids: Vec<u32>,
 }
 
+#[ComplexObject]
 impl Crate {
-    pub(crate) fn new(metadata: Metadata, versions: Vec<Version>) -> Self {
+    #[graphql(skip)]
+    pub fn new(metadata: Metadata, versions: Vec<Version>, owner_ids: Vec<u32>) -> Self {
         let all_versions = versions.into_iter().map(|v| v.to_string()).collect();
         Self {
             id: format!("{}-{}", &metadata.name, &metadata.vers).into(),
@@ -52,7 +75,23 @@ impl Crate {
             categories: metadata.categories,
             repository: metadata.repository.map(From::from),
             all_versions,
+            owner_ids,
         }
+    }
+
+    async fn owners(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
+        let repository = ctx.data::<DynRepository>()?;
+
+        let queries: Vec<_> = self
+            .owner_ids
+            .iter()
+            .map(|id| repository.get_user_by_id(*id))
+            .collect();
+
+        let res = try_join_all(queries).await?;
+        let users: Vec<_> = res.into_iter().flatten().map(|u| u.into()).collect();
+
+        Ok(users)
     }
 }
 

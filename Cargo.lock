@@ -1617,6 +1617,7 @@ dependencies = [
  "axum",
  "base64 0.21.0",
  "byteorder",
+ "futures",
  "hex",
  "http",
  "lambda-web",

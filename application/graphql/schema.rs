@@ -34,7 +34,7 @@ impl Query {
         Ok(crates)
     }
 
-    async fn crate_details(
+    async fn crate_version(
         &self,
         ctx: &Context<'_>,
         name: String,
@@ -42,13 +42,9 @@ impl Query {
     ) -> Result<Crate> {
         let repository = ctx.data::<DynRepository>()?;
 
-        let version = match version {
-            None => {
-                let details = repository.get_crate_details(&name).await?;
-                details.max_version
-            }
-            Some(v) => Version::from_str(&v)?,
-        };
+        let summary = repository.get_crate_summary(&name).await?;
+        let version = version.map_or(Ok(summary.max_version), |v| Version::from_str(&v))?;
+
         let metadata_fut = repository.get_crate_metadata(&name, &version);
         let versions_fut = repository.list_crate_versions(&name);
 
@@ -56,7 +52,7 @@ impl Query {
         let metadata = metadata_result?;
         let versions = versions_result?;
 
-        Ok(Crate::new(metadata, versions))
+        Ok(Crate::new(metadata, versions, summary.owners))
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {

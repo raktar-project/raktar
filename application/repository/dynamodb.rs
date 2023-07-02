@@ -1,3 +1,5 @@
+mod user;
+
 use anyhow::anyhow;
 use aws_sdk_dynamodb::operation::put_item::PutItemError;
 use aws_sdk_dynamodb::operation::transact_write_items::TransactWriteItemsError;
@@ -15,11 +17,12 @@ use tracing::{error, info};
 
 use crate::auth::AuthenticatedUser;
 use crate::error::{internal_error, AppError, AppResult};
-use crate::models::crate_details::CrateDetails;
+use crate::models::crate_summary::CrateSummary;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
-use crate::models::user::User;
+use crate::models::user::{User, UserId};
+use crate::repository::dynamodb::user::get_user_by_id;
 use crate::repository::Repository;
 
 static CRATES_PARTITION_KEY: &str = "CRATES";
@@ -67,7 +70,7 @@ impl DynamoDBRepository {
         Some(key)
     }
 
-    async fn get_crate_details(&self, crate_name: &str) -> AppResult<Option<CrateDetails>> {
+    async fn get_crate_details(&self, crate_name: &str) -> AppResult<Option<CrateSummary>> {
         let res = self
             .db_client
             .get_item()
@@ -77,7 +80,7 @@ impl DynamoDBRepository {
             .await?;
 
         let details = if let Some(item) = res.item {
-            let crate_info: CrateDetails = from_item(item)?;
+            let crate_info: CrateSummary = from_item(item)?;
 
             Some(crate_info)
         } else {
@@ -92,7 +95,7 @@ impl DynamoDBRepository {
         crate_name: &str,
         version: &Version,
         package_info: PackageInfo,
-        crate_details: CrateDetails,
+        crate_details: CrateSummary,
         is_new: bool,
     ) -> AppResult<()> {
         let item = to_item(crate_details)?;
@@ -317,7 +320,7 @@ impl Repository for DynamoDBRepository {
         match self.get_crate_details(crate_name).await? {
             // this is a brand new crate
             None => {
-                let crate_details = CrateDetails {
+                let crate_details = CrateSummary {
                     name: crate_name.to_string(),
                     owners: vec![authenticated_user.id],
                     max_version: package_info.vers.clone(),
@@ -344,7 +347,7 @@ impl Repository for DynamoDBRepository {
                 // the head state represents the latest version, so while it's valid to
                 // publish a non-head version, this should not affect the crate details
                 if old_crate_details.max_version < package_info.vers {
-                    let crate_details = CrateDetails {
+                    let crate_details = CrateSummary {
                         name: crate_name.to_string(),
                         owners: old_crate_details.owners,
                         max_version: package_info.vers.clone(),
@@ -433,7 +436,7 @@ impl Repository for DynamoDBRepository {
         Ok(())
     }
 
-    async fn get_crate_details(&self, crate_name: &str) -> AppResult<CrateDetails> {
+    async fn get_crate_summary(&self, crate_name: &str) -> AppResult<CrateSummary> {
         let result = self
             .db_client
             .get_item()
@@ -453,7 +456,7 @@ impl Repository for DynamoDBRepository {
         &self,
         filter: Option<String>,
         limit: usize,
-    ) -> AppResult<Vec<CrateDetails>> {
+    ) -> AppResult<Vec<CrateSummary>> {
         let query_builder = self
             .db_client
             .query()
@@ -479,7 +482,7 @@ impl Repository for DynamoDBRepository {
 
         let output = query_builder.send().await?;
         let items = output.items().unwrap_or(&[]);
-        let crates = from_items::<CrateDetails>(items.to_vec())?;
+        let crates = from_items::<CrateSummary>(items.to_vec())?;
 
         Ok(crates)
     }
@@ -633,5 +636,9 @@ impl Repository for DynamoDBRepository {
                 })
             }
         }
+    }
+
+    async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>> {
+        get_user_by_id(&self.db_client, &self.table_name, user_id).await
     }
 }

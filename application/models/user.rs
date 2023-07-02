@@ -6,5 +6,6 @@ pub type UserId = u32;
 pub struct User {
     pub id: UserId,
     pub login: String,
+    #[serde(default)]
     pub name: Option<String>,
 }
