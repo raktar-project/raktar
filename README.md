@@ -30,4 +30,4 @@ flag will be stabilised.
 
 # Installation Guide
 
-Please refer to the [documentation](https://raktar.io] for detailed steps to install Raktar into your AWS environment.
+Please refer to the [documentation](https://raktar.io) for detailed steps to install Raktar into your AWS environment.
