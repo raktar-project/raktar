@@ -2,7 +2,6 @@ use anyhow::anyhow;
 use async_graphql::{Context, EmptySubscription, Object, Result, Schema};
 use semver::Version;
 use std::str::FromStr;
-use tokio::join;
 
 use crate::auth::{generate_new_token, AuthenticatedUser};
 use crate::graphql::types::{CrateSummary, CrateVersion, DeletedToken, GeneratedToken, Token};
@@ -57,15 +56,9 @@ impl Query {
             }
             Some(v) => Version::from_str(&v)?,
         };
+        let metadata = repository.get_crate_metadata(&name, &version).await?;
 
-        let metadata_fut = repository.get_crate_metadata(&name, &version);
-        let versions_fut = repository.list_crate_versions(&name);
-
-        let (metadata_result, versions_result) = join!(metadata_fut, versions_fut);
-        let metadata = metadata_result?;
-        let versions = versions_result?;
-
-        Ok(CrateVersion::new(metadata, versions))
+        Ok(metadata.into())
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {

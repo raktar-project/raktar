@@ -1,6 +1,5 @@
 use async_graphql::{ComplexObject, Context, Result, SimpleObject, ID};
 use futures::future::try_join_all;
-use semver::Version;
 
 use crate::models::crate_summary::CrateSummary as CrateSummaryModel;
 use crate::models::metadata::Metadata;
@@ -35,6 +34,19 @@ impl CrateSummary {
 
         Ok(users)
     }
+
+    async fn versions(&self, ctx: &Context<'_>) -> Result<Vec<String>> {
+        let repository = ctx.data::<DynRepository>()?;
+
+        let versions = repository
+            .list_crate_versions(&self.name)
+            .await?
+            .into_iter()
+            .map(|v| v.to_string())
+            .collect();
+
+        Ok(versions)
+    }
 }
 
 impl From<CrateSummaryModel> for CrateSummary {
@@ -65,6 +77,7 @@ impl From<UserModel> for User {
 }
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub struct CrateVersion {
     id: ID,
     name: String,
@@ -75,12 +88,10 @@ pub struct CrateVersion {
     keywords: Vec<String>,
     categories: Vec<String>,
     repository: Option<String>,
-    all_versions: Vec<String>,
 }
 
-impl CrateVersion {
-    pub fn new(metadata: Metadata, versions: Vec<Version>) -> Self {
-        let all_versions = versions.into_iter().map(|v| v.to_string()).collect();
+impl From<Metadata> for CrateVersion {
+    fn from(metadata: Metadata) -> Self {
         Self {
             id: format!("{}-{}", &metadata.name, &metadata.vers).into(),
             name: metadata.name,
@@ -91,8 +102,18 @@ impl CrateVersion {
             keywords: metadata.keywords,
             categories: metadata.categories,
             repository: metadata.repository.map(From::from),
-            all_versions,
         }
+    }
+}
+
+#[ComplexObject]
+impl CrateVersion {
+    #[graphql(name = "crate")]
+    async fn get_crate(&self, ctx: &Context<'_>) -> Result<CrateSummary> {
+        let repository = ctx.data::<DynRepository>()?;
+        let crate_summary = repository.get_crate_summary(&self.name).await?;
+
+        Ok(crate_summary.into())
     }
 }
 
