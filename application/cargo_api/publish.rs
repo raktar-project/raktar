@@ -8,12 +8,12 @@ use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 use tracing::info;
 
-use crate::api::AppState;
 use crate::auth::AuthenticatedUser;
 use crate::error::AppResult;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::repository::DynRepository;
+use crate::router::AppState;
 use crate::storage::DynCrateStorage;
 
 #[derive(Serialize)]
