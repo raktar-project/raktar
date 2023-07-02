@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use aws_sdk_dynamodb::Client;
 use axum::Router;
-use raktar::api::build_router;
 use raktar::repository::{DynRepository, DynamoDBRepository};
+use raktar::router::build_router;
 use raktar::storage::{DynCrateStorage, S3Storage};
 
 #[tokio::main]

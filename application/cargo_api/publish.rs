@@ -8,12 +8,12 @@ use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 use tracing::info;
 
-use crate::api::AppState;
 use crate::auth::AuthenticatedUser;
 use crate::error::AppResult;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::repository::DynRepository;
+use crate::router::AppState;
 use crate::storage::DynCrateStorage;
 
 #[derive(Serialize)]
@@ -28,8 +28,6 @@ pub async fn publish_crate_handler(
     State((repository, storage)): State<AppState>,
     body: Bytes,
 ) -> AppResult<Json<PublishResponse>> {
-    info!("publish bytes: {:?}", body);
-
     publish_crate(authenticated_user, storage, repository, body).await?;
 
     Ok(Json(PublishResponse {
@@ -53,6 +51,15 @@ pub async fn publish_crate(
     let crate_name = metadata.name.clone();
     let checksum: String = Sha256::digest(&crate_bytes).encode_hex();
     let package_info = PackageInfo::from_metadata(metadata.clone(), &checksum);
+
+    info!(
+        crate_name,
+        vers = vers.to_string(),
+        user_id = authenticated_user.id,
+        "publishing new crate: {} {}",
+        crate_name,
+        vers
+    );
 
     repository
         .store_package_info(

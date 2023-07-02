@@ -2,9 +2,9 @@ use axum::extract::{Path, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::api::AppState;
 use crate::error::AppResult;
 use crate::models::user::User;
+use crate::router::AppState;
 
 #[derive(Debug, Serialize)]
 pub struct ListOwnersResponse {

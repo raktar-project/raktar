@@ -1,7 +1,7 @@
 use axum::extract::{Path, State};
 
-use crate::api::AppState;
 use crate::error::AppResult;
+use crate::router::AppState;
 
 pub async fn get_info_for_short_name_crate(
     Path(crate_name): Path<String>,

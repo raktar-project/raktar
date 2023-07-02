@@ -1,21 +1,13 @@
-pub mod config;
-pub mod download;
-pub mod index;
-pub mod owners;
-pub mod publish;
-pub mod unyank;
-pub mod yank;
-
-use crate::api::config::get_config_json;
-use crate::api::download::download_crate;
-use crate::api::index::{
+use crate::auth::token_authenticator;
+use crate::cargo_api::config::get_config_json;
+use crate::cargo_api::download::download_crate;
+use crate::cargo_api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
-use crate::api::owners::{add_owners, list_owners};
-use crate::api::publish::publish_crate_handler;
-use crate::api::unyank::unyank;
-use crate::api::yank::yank;
-use crate::auth::token_authenticator;
+use crate::cargo_api::owners::{add_owners, list_owners};
+use crate::cargo_api::publish::publish_crate_handler;
+use crate::cargo_api::unyank::unyank;
+use crate::cargo_api::yank::yank;
 use crate::graphql::handler::{graphiql, graphql_handler};
 use crate::graphql::schema::build_schema;
 use crate::repository::DynRepository;
