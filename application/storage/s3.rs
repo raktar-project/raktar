@@ -3,8 +3,8 @@ use aws_sdk_s3::operation::get_object::GetObjectError;
 use aws_sdk_s3::Client;
 use semver::Version;
 
+use crate::error::{AppError, AppResult};
 use crate::storage::CrateStorage;
-use raktar::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct S3Storage {
@@ -14,7 +14,7 @@ pub struct S3Storage {
 }
 
 impl S3Storage {
-    pub(crate) async fn new() -> Self {
+    pub async fn new() -> Self {
         let aws_config = aws_config::from_env().load().await;
         let bucket =
             std::env::var("CRATES_BUCKET_NAME").expect("S3 bucket to be configured in env");

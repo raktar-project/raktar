@@ -13,6 +13,7 @@ use std::str::FromStr;
 
 use tracing::{error, info};
 
+use crate::auth::AuthenticatedUser;
 use crate::error::{internal_error, AppError, AppResult};
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
@@ -304,32 +305,57 @@ impl Repository for DynamoDBRepository {
         version: &Version,
         package_info: PackageInfo,
         metadata: Metadata,
+        authenticated_user: &AuthenticatedUser,
     ) -> AppResult<()> {
-        let old_crate_details = self.get_crate_details(crate_name).await?;
-        let should_update_crate_details = old_crate_details
-            .as_ref()
-            .map(|old| old.max_version < package_info.vers)
-            .unwrap_or(true);
-
-        if should_update_crate_details {
-            let crate_details = CrateDetails {
-                name: crate_name.to_string(),
-                // TODO: this should be the user's ID once auth is in place
-                owners: vec![0],
-                max_version: package_info.vers.clone(),
-                description: metadata.description.clone().unwrap_or("".to_string()),
-            };
-            self.put_package_version_with_new_details(
-                crate_name,
-                version,
-                package_info,
-                crate_details,
-                old_crate_details.is_none(),
-            )
-            .await?;
-        } else {
-            self.put_package_version(crate_name, version, package_info)
+        match self.get_crate_details(crate_name).await? {
+            // this is a brand new crate
+            None => {
+                let crate_details = CrateDetails {
+                    name: crate_name.to_string(),
+                    owners: vec![authenticated_user.id],
+                    max_version: package_info.vers.clone(),
+                    description: metadata.description.clone().unwrap_or("".to_string()),
+                };
+                self.put_package_version_with_new_details(
+                    crate_name,
+                    version,
+                    package_info,
+                    crate_details,
+                    true,
+                )
                 .await?;
+            }
+            // this is an update to an existing crate
+            Some(old_crate_details) => {
+                if !old_crate_details.owners.contains(&authenticated_user.id) {
+                    return Err(AppError::Unauthorized(
+                        "user is not an owner of this package".to_string(),
+                    ));
+                }
+
+                // should we update the head state of the crate?
+                // the head state represents the latest version, so while it's valid to
+                // publish a non-head version, this should not affect the crate details
+                if old_crate_details.max_version < package_info.vers {
+                    let crate_details = CrateDetails {
+                        name: crate_name.to_string(),
+                        owners: old_crate_details.owners,
+                        max_version: package_info.vers.clone(),
+                        description: metadata.description.clone().unwrap_or("".to_string()),
+                    };
+                    self.put_package_version_with_new_details(
+                        crate_name,
+                        version,
+                        package_info,
+                        crate_details,
+                        false,
+                    )
+                    .await?;
+                } else {
+                    self.put_package_version(crate_name, version, package_info)
+                        .await?;
+                }
+            }
         }
 
         self.put_package_metadata(metadata).await

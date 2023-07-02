@@ -4,8 +4,7 @@ use semver::Version;
 use std::str::FromStr;
 use tokio::join;
 
-use crate::auth::generate_new_token;
-use crate::graphql::handler::AuthenticatedUser;
+use crate::auth::{generate_new_token, AuthenticatedUser};
 use crate::graphql::types::{Crate, CrateSummary, DeletedToken, GeneratedToken, Token};
 use crate::repository::DynRepository;
 

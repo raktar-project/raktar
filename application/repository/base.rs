@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use semver::Version;
 
+use crate::auth::AuthenticatedUser;
 use crate::error::AppResult;
 use crate::models::crate_details::CrateDetails;
 use crate::models::index::PackageInfo;
@@ -18,6 +19,7 @@ pub trait Repository {
         version: &Version,
         package_info: PackageInfo,
         metadata: Metadata,
+        authenticated_user: &AuthenticatedUser,
     ) -> AppResult<()>;
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()>;
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;

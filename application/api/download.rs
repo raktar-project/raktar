@@ -3,8 +3,8 @@ use std::str::FromStr;
 use axum::extract::{Path, State};
 use semver::Version;
 
-use crate::AppState;
-use raktar::error::AppResult;
+use crate::api::AppState;
+use crate::error::AppResult;
 
 pub async fn download_crate(
     Path((crate_name, version)): Path<(String, String)>,

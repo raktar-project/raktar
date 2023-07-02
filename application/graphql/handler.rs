@@ -1,3 +1,4 @@
+use crate::auth::AuthenticatedUser;
 use anyhow::{anyhow, bail, Result};
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
@@ -10,10 +11,6 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use crate::graphql::schema::RaktarSchema;
-
-pub struct AuthenticatedUser {
-    pub id: u32,
-}
 
 pub async fn graphql_handler(
     schema: Extension<RaktarSchema>,

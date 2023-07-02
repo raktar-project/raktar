@@ -22,6 +22,8 @@ pub enum AppError {
         crate_name: String,
         version: Version,
     },
+    #[error("package info for {0} does not exist")]
+    Unauthorized(String),
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
     #[error("unexpected error")]
@@ -35,6 +37,7 @@ impl IntoResponse for AppError {
             AppError::NonExistentPackageInfo(_) => StatusCode::NOT_FOUND,
             AppError::NonExistentCrateVersion { .. } => StatusCode::NOT_FOUND,
             AppError::DuplicateCrateVersion { .. } => StatusCode::BAD_REQUEST,
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Other(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
