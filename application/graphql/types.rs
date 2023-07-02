@@ -9,11 +9,32 @@ use crate::models::user::User as UserModel;
 use crate::repository::DynRepository;
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub struct CrateSummary {
     id: ID,
     name: String,
     max_version: String,
     description: String,
+    #[graphql(skip)]
+    owner_ids: Vec<u32>,
+}
+
+#[ComplexObject]
+impl CrateSummary {
+    async fn owners(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
+        let repository = ctx.data::<DynRepository>()?;
+
+        let queries: Vec<_> = self
+            .owner_ids
+            .iter()
+            .map(|id| repository.get_user_by_id(*id))
+            .collect();
+
+        let res = try_join_all(queries).await?;
+        let users: Vec<_> = res.into_iter().flatten().map(|u| u.into()).collect();
+
+        Ok(users)
+    }
 }
 
 impl From<CrateSummaryModel> for CrateSummary {
@@ -23,6 +44,7 @@ impl From<CrateSummaryModel> for CrateSummary {
             name: value.name,
             max_version: value.max_version.to_string(),
             description: value.description,
+            owner_ids: value.owners,
         }
     }
 }
@@ -43,8 +65,7 @@ impl From<UserModel> for User {
 }
 
 #[derive(SimpleObject)]
-#[graphql(complex)]
-pub struct Crate {
+pub struct CrateVersion {
     id: ID,
     name: String,
     version: String,
@@ -55,14 +76,10 @@ pub struct Crate {
     categories: Vec<String>,
     repository: Option<String>,
     all_versions: Vec<String>,
-    #[graphql(skip)]
-    owner_ids: Vec<u32>,
 }
 
-#[ComplexObject]
-impl Crate {
-    #[graphql(skip)]
-    pub fn new(metadata: Metadata, versions: Vec<Version>, owner_ids: Vec<u32>) -> Self {
+impl CrateVersion {
+    pub fn new(metadata: Metadata, versions: Vec<Version>) -> Self {
         let all_versions = versions.into_iter().map(|v| v.to_string()).collect();
         Self {
             id: format!("{}-{}", &metadata.name, &metadata.vers).into(),
@@ -75,23 +92,7 @@ impl Crate {
             categories: metadata.categories,
             repository: metadata.repository.map(From::from),
             all_versions,
-            owner_ids,
         }
-    }
-
-    async fn owners(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
-        let repository = ctx.data::<DynRepository>()?;
-
-        let queries: Vec<_> = self
-            .owner_ids
-            .iter()
-            .map(|id| repository.get_user_by_id(*id))
-            .collect();
-
-        let res = try_join_all(queries).await?;
-        let users: Vec<_> = res.into_iter().flatten().map(|u| u.into()).collect();
-
-        Ok(users)
     }
 }
 

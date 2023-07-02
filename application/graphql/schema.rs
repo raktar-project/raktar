@@ -5,7 +5,7 @@ use std::str::FromStr;
 use tokio::join;
 
 use crate::auth::{generate_new_token, AuthenticatedUser};
-use crate::graphql::types::{Crate, CrateSummary, DeletedToken, GeneratedToken, Token};
+use crate::graphql::types::{CrateSummary, CrateVersion, DeletedToken, GeneratedToken, Token};
 use crate::repository::DynRepository;
 
 pub struct Query;
@@ -34,16 +34,29 @@ impl Query {
         Ok(crates)
     }
 
+    #[graphql(name = "crate")]
+    async fn get_crate(&self, ctx: &Context<'_>, name: String) -> Result<CrateSummary> {
+        let repository = ctx.data::<DynRepository>()?;
+        let crate_summary = repository.get_crate_summary(&name).await?;
+
+        Ok(crate_summary.into())
+    }
+
     async fn crate_version(
         &self,
         ctx: &Context<'_>,
         name: String,
         version: Option<String>,
-    ) -> Result<Crate> {
+    ) -> Result<CrateVersion> {
         let repository = ctx.data::<DynRepository>()?;
 
-        let summary = repository.get_crate_summary(&name).await?;
-        let version = version.map_or(Ok(summary.max_version), |v| Version::from_str(&v))?;
+        let version = match version {
+            None => {
+                let summary = repository.get_crate_summary(&name).await?;
+                summary.max_version
+            }
+            Some(v) => Version::from_str(&v)?,
+        };
 
         let metadata_fut = repository.get_crate_metadata(&name, &version);
         let versions_fut = repository.list_crate_versions(&name);
@@ -52,7 +65,7 @@ impl Query {
         let metadata = metadata_result?;
         let versions = versions_result?;
 
-        Ok(Crate::new(metadata, versions, summary.owners))
+        Ok(CrateVersion::new(metadata, versions))
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {
