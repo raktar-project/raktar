@@ -76,7 +76,7 @@ static DYNAMODB_REPOSITORY: OnceCell<DynamoDBRepository> = OnceCell::const_new()
 async fn get_dynamodb_repository() -> DynamoDBRepository {
     let aws_config = aws_config::from_env().load().await;
     let db_client = Client::new(&aws_config);
-    DynamoDBRepository::new(db_client)
+    DynamoDBRepository::new_from_env(db_client)
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -31,11 +31,18 @@ pub struct DynamoDBRepository {
 }
 
 impl DynamoDBRepository {
-    pub fn new(db_client: Client) -> Self {
+    pub fn new(db_client: Client, table_name: String) -> Self {
         Self {
             db_client,
-            table_name: std::env::var("TABLE_NAME").unwrap(),
+            table_name,
         }
+    }
+
+    pub fn new_from_env(db_client: Client) -> Self {
+        Self::new(
+            db_client,
+            std::env::var("TABLE_NAME").expect("TABLE_NAME to be set in environment"),
+        )
     }
 
     fn get_package_key(crate_name: &str) -> AttributeValue {

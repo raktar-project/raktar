@@ -12,12 +12,11 @@ fn generate_random_key() -> String {
 }
 
 pub async fn build_repository() -> DynamoDBRepository {
-    let table_name = &generate_random_key();
-    let access_key = &generate_random_key();
+    let table_name = generate_random_key();
+    let access_key = generate_random_key();
 
-    std::env::set_var("AWS_ACCESS_KEY_ID", access_key);
+    std::env::set_var("AWS_ACCESS_KEY_ID", &access_key);
     std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
-    std::env::set_var("TABLE_NAME", table_name);
 
     let config = aws_config::from_env()
         .endpoint_url("http://localhost:8000")
@@ -48,7 +47,7 @@ pub async fn build_repository() -> DynamoDBRepository {
     let gsi = build_user_data_gsi();
     db_client
         .create_table()
-        .table_name(table_name)
+        .table_name(&table_name)
         .key_schema(pk_schema)
         .attribute_definitions(pk_definition)
         .key_schema(sk_schema)
@@ -65,9 +64,9 @@ pub async fn build_repository() -> DynamoDBRepository {
         .await
         .expect("to be able to create table");
 
-    wait_for_table(&db_client, table_name).await;
+    wait_for_table(&db_client, &table_name).await;
 
-    DynamoDBRepository::new(db_client)
+    DynamoDBRepository::new(db_client, table_name)
 }
 
 async fn wait_for_table(db_client: &Client, table_name: &str) {
