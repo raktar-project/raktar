@@ -21,7 +21,7 @@ use crate::models::crate_summary::CrateSummary;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
-use crate::models::user::{User, UserId};
+use crate::models::user::{CognitoUserData, User, UserId};
 use crate::repository::dynamodb::user::get_user_by_id;
 use crate::repository::Repository;
 
@@ -216,44 +216,39 @@ impl DynamoDBRepository {
         Ok(())
     }
 
-    async fn create_next_user(&self, login: &str) -> AppResult<User> {
+    async fn create_next_user(&self, user_data: CognitoUserData) -> AppResult<User> {
         let next_id = self.find_next_user_id().await?;
         info!("next available ID is {}", next_id);
 
-        self.put_new_user(login, next_id).await
+        let user = user_data.into_user(next_id);
+
+        self.put_new_user(user).await
     }
 
-    async fn put_new_user(&self, login: &str, user_id: u32) -> AppResult<User> {
+    async fn put_new_user(&self, user: User) -> AppResult<User> {
         let put = Put::builder()
             .table_name(&self.table_name)
+            .set_item(Some(to_item(user.clone())?))
             .item("pk", AttributeValue::S("USERS".to_string()))
-            .item("sk", AttributeValue::S(format!("LOGIN#{}", login)))
-            .item("id", AttributeValue::N(user_id.to_string()))
+            .item("sk", AttributeValue::S(format!("LOGIN#{}", user.login)))
             .build();
         let put_login_mapping_item = TransactWriteItem::builder().put(put).build();
 
-        let user_id_sk = AttributeValue::S(format!("ID#{:06}", user_id));
+        let user_id_sk = AttributeValue::S(format!("ID#{:06}", user.id.clone()));
         let put = Put::builder()
             .table_name(&self.table_name)
+            .set_item(Some(to_item(user.clone())?))
             .item("pk", AttributeValue::S("USERS".to_string()))
             .item("sk", user_id_sk)
-            .item("id", AttributeValue::N(user_id.to_string()))
-            .item("login", AttributeValue::S(login.to_string()))
             .build();
         let put_user_item = TransactWriteItem::builder().put(put).build();
 
-        let user = self
-            .db_client
+        self.db_client
             .transact_write_items()
             .transact_items(put_login_mapping_item)
             .transact_items(put_user_item)
             .send()
-            .await
-            .map(|_| User {
-                login: login.to_string(),
-                id: user_id,
-                name: None,
-            })?;
+            .await?;
 
         Ok(user)
     }
@@ -410,10 +405,11 @@ impl Repository for DynamoDBRepository {
                     .owners
                     .into_iter()
                     .map(|id| User {
-                        // TODO: map login properly
+                        // TODO: this is all dummy logic apart from the ID, it needs to be fixed
                         id,
                         login: "dummy".to_string(),
-                        name: None,
+                        given_name: "dummy".to_string(),
+                        family_name: "dummy".to_string(),
                     })
                     .collect();
                 Ok(users)
@@ -605,19 +601,22 @@ impl Repository for DynamoDBRepository {
         Ok(token_item)
     }
 
-    async fn get_or_create_user(&self, login: &str) -> AppResult<User> {
-        #[derive(Debug, serde::Deserialize)]
-        struct LoginNameMapping {
-            id: u32,
-        }
-
+    /// Used by the pre-token Lambda to ensure the SSO user is up to date in the repository.
+    ///
+    /// This either creates a new user, or checks whether the existing user has the
+    /// latest data (e.g. first name and last name being up to date) and bring the
+    /// database in line if it's out of sync.
+    async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User> {
         // TODO: should we store down the name?
         let output = self
             .db_client
             .get_item()
             .table_name(&self.table_name)
             .key("pk", AttributeValue::S("USERS".to_string()))
-            .key("sk", AttributeValue::S(format!("LOGIN#{}", login)))
+            .key(
+                "sk",
+                AttributeValue::S(format!("LOGIN#{}", user_data.login)),
+            )
             .send()
             .await?;
 
@@ -625,15 +624,12 @@ impl Repository for DynamoDBRepository {
         match output.item().cloned() {
             None => {
                 info!("user not found, creating new user");
-                self.create_next_user(login).await
+                self.create_next_user(user_data).await
             }
             Some(item) => {
-                let mapping: LoginNameMapping = from_item(item)?;
-                Ok(User {
-                    id: mapping.id,
-                    login: login.to_string(),
-                    name: None,
-                })
+                let user: User = from_item(item)?;
+                // TODO: if the details of the user in the database are stale, we should update it
+                Ok(user)
             }
         }
     }

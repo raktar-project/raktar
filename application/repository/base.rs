@@ -8,7 +8,7 @@ use crate::models::crate_summary::CrateSummary;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
-use crate::models::user::{User, UserId};
+use crate::models::user::{CognitoUserData, User, UserId};
 
 #[async_trait::async_trait]
 pub trait Repository {
@@ -41,7 +41,7 @@ pub trait Repository {
     async fn delete_auth_token(&self, user_id: u32, token_id: String) -> AppResult<()>;
     async fn list_auth_tokens(&self, user_id: u32) -> AppResult<Vec<TokenItem>>;
     async fn get_auth_token(&self, token: &[u8]) -> AppResult<Option<TokenItem>>;
-    async fn get_or_create_user(&self, login: &str) -> AppResult<User>;
+    async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User>;
     async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>>;
 }
 
