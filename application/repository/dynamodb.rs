@@ -628,6 +628,7 @@ impl Repository for DynamoDBRepository {
             }
             Some(item) => {
                 let user: User = from_item(item)?;
+                // TODO: if the details of the user in the database are stale, we should update it
                 Ok(user)
             }
         }
