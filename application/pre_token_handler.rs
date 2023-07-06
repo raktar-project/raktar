@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use aws_sdk_dynamodb::Client;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
+use raktar::models::user::CognitoUserData;
 use serde::{Deserialize, Serialize};
 use serde_json::{to_value, Value};
 use tokio::sync::OnceCell;
@@ -29,14 +30,22 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     info!("pre-token triggered: {}", event);
     match serde_json::from_value::<TriggerEvent>(event.clone()) {
         Ok(trigger_event) => {
-            let identities_string = trigger_event.request.user_attributes.identities;
-            match serde_json::from_str::<Vec<Identity>>(&identities_string) {
+            let user_attributes = trigger_event.request.user_attributes;
+            match serde_json::from_str::<Vec<Identity>>(&user_attributes.identities) {
                 Ok(identities) => match identities.get(0) {
                     Some(identity) => {
-                        let login = &identity.user_id;
-                        match repository.get_or_create_user(login).await {
+                        let user = CognitoUserData {
+                            login: identity.user_id.clone(),
+                            given_name: user_attributes.given_name,
+                            family_name: user_attributes.family_name,
+                        };
+                        match repository.update_or_create_user(user).await {
                             Ok(user) => {
-                                info!(login, id = user.id, "adding extra claims for user");
+                                info!(
+                                    login = user.login,
+                                    id = user.id,
+                                    "adding extra claims for user"
+                                );
                                 let response = Response::new(user.id);
                                 let response_value = to_value(response)?;
                                 event
@@ -120,6 +129,8 @@ struct Request {
 #[derive(Clone, Debug, Deserialize)]
 struct UserAttributes {
     identities: String,
+    given_name: String,
+    family_name: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
