@@ -1,10 +1,12 @@
 use anyhow::anyhow;
-use async_graphql::{Context, EmptySubscription, Object, Result, Schema};
+use async_graphql::{Context, EmptySubscription, Object, Result, Schema, ID};
 use semver::Version;
 use std::str::FromStr;
 
 use crate::auth::{generate_new_token, AuthenticatedUser};
-use crate::graphql::types::{CrateSummary, CrateVersion, DeletedToken, GeneratedToken, Token};
+use crate::graphql::types::{
+    CrateSummary, CrateVersion, DeletedToken, GeneratedToken, Token, User,
+};
 use crate::repository::DynRepository;
 
 pub struct Query;
@@ -67,6 +69,22 @@ impl Query {
 
         let token_items = repository.list_auth_tokens(user.id).await?;
         Ok(token_items.into_iter().map(From::from).collect())
+    }
+
+    async fn user(&self, ctx: &Context<'_>, id: ID) -> Result<Option<User>> {
+        let repository = ctx.data::<DynRepository>()?;
+        let user = repository.get_user_by_id(id.parse::<u32>()?).await?;
+
+        Ok(user.map(|u| u.into()))
+    }
+
+    async fn users(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
+        let repository = ctx.data::<DynRepository>()?;
+        repository
+            .get_users()
+            .await
+            .map(|users| users.into_iter().map(|u| u.into()).collect())
+            .map_err(|err| err.into())
     }
 }
 

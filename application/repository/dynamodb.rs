@@ -22,7 +22,7 @@ use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
 use crate::models::user::{CognitoUserData, User, UserId};
-use crate::repository::dynamodb::user::get_user_by_id;
+use crate::repository::dynamodb::user::{get_user_by_id, get_users};
 use crate::repository::Repository;
 
 static CRATES_PARTITION_KEY: &str = "CRATES";
@@ -636,5 +636,9 @@ impl Repository for DynamoDBRepository {
 
     async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>> {
         get_user_by_id(&self.db_client, &self.table_name, user_id).await
+    }
+
+    async fn get_users(&self) -> AppResult<Vec<User>> {
+        get_users(&self.db_client, &self.table_name).await
     }
 }
