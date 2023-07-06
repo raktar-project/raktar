@@ -65,6 +65,8 @@ impl From<CrateSummaryModel> for CrateSummary {
 pub struct User {
     id: ID,
     login: String,
+    given_name: String,
+    family_name: String,
 }
 
 impl From<UserModel> for User {
@@ -72,6 +74,8 @@ impl From<UserModel> for User {
         Self {
             id: value.id.into(),
             login: value.login,
+            given_name: value.given_name,
+            family_name: value.family_name,
         }
     }
 }
