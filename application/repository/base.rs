@@ -43,6 +43,7 @@ pub trait Repository {
     async fn get_auth_token(&self, token: &[u8]) -> AppResult<Option<TokenItem>>;
     async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User>;
     async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>>;
+    async fn get_users(&self) -> AppResult<Vec<User>>;
 }
 
 pub type DynRepository = Arc<dyn Repository + Send + Sync>;

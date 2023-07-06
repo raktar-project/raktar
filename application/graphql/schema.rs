@@ -77,6 +77,15 @@ impl Query {
 
         Ok(user.map(|u| u.into()))
     }
+
+    async fn users(&self, ctx: &Context<'_>) -> Result<Vec<User>> {
+        let repository = ctx.data::<DynRepository>()?;
+        repository
+            .get_users()
+            .await
+            .map(|users| users.into_iter().map(|u| u.into()).collect())
+            .map_err(|err| err.into())
+    }
 }
 
 pub struct Mutation;
