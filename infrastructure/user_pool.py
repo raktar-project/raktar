@@ -61,6 +61,16 @@ class RaktarUserPool(Construct):
             user_pool_name="raktar-users",
             self_sign_up_enabled=False,
             lambda_triggers=triggers,
+            standard_attributes=cognito.StandardAttributes(
+                given_name=cognito.StandardAttribute(
+                    required=True,
+                    mutable=True,
+                ),
+                family_name=cognito.StandardAttribute(
+                    required=True,
+                    mutable=True,
+                ),
+            ),
         )
 
     def _build_user_pool_client(
@@ -96,4 +106,8 @@ class RaktarUserPool(Construct):
             metadata=cognito.UserPoolIdentityProviderSamlMetadata.url(sso_metadata_url),
             name="sso-provider",
             user_pool=user_pool,
+            attribute_mapping=cognito.AttributeMapping(
+                given_name=cognito.ProviderAttribute.other("given_name"),
+                family_name=cognito.ProviderAttribute.other("family_name"),
+            ),
         )
