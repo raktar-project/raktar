@@ -1,4 +1,4 @@
-mod user;
+pub mod user;
 
 use anyhow::anyhow;
 use aws_sdk_dynamodb::operation::put_item::PutItemError;
@@ -22,7 +22,7 @@ use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
 use crate::models::user::{CognitoUserData, User, UserId};
-use crate::repository::dynamodb::user::{create_next_user, get_user_by_id, get_users};
+use crate::repository::dynamodb::user::{get_user_by_id, get_users, update_or_create_user};
 use crate::repository::Repository;
 
 static CRATES_PARTITION_KEY: &str = "CRATES";
@@ -556,30 +556,7 @@ impl Repository for DynamoDBRepository {
     /// latest data (e.g. first name and last name being up to date) and bring the
     /// database in line if it's out of sync.
     async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User> {
-        let output = self
-            .db_client
-            .get_item()
-            .table_name(&self.table_name)
-            .key("pk", AttributeValue::S("USERS".to_string()))
-            .key(
-                "sk",
-                AttributeValue::S(format!("LOGIN#{}", user_data.login)),
-            )
-            .send()
-            .await?;
-
-        // TODO: this has a race condition where two processes can both think the user doesn't exist yet
-        match output.item().cloned() {
-            None => {
-                info!("user not found, creating new user");
-                create_next_user(&self.db_client, &self.table_name, user_data).await
-            }
-            Some(item) => {
-                let user: User = from_item(item)?;
-                // TODO: if the details of the user in the database are stale, we should update it
-                Ok(user)
-            }
-        }
+        update_or_create_user(&self.db_client, &self.table_name, user_data).await
     }
 
     async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>> {

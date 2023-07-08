@@ -1,10 +1,10 @@
-use crate::error::AppResult;
 use aws_sdk_dynamodb::types::{AttributeValue, Put, TransactWriteItem};
 use aws_sdk_dynamodb::Client;
-use serde_dynamo::{from_items, to_item};
+use serde_dynamo::{from_item, from_items, to_item};
 use std::str::FromStr;
 use tracing::info;
 
+use crate::error::AppResult;
 use crate::models::user::{CognitoUserData, User, UserId};
 
 pub async fn get_user_by_id(
@@ -55,6 +55,7 @@ pub async fn put_new_user(db_client: &Client, table_name: &str, user: User) -> A
         .set_item(Some(to_item(user.clone())?))
         .item("pk", AttributeValue::S("USERS".to_string()))
         .item("sk", AttributeValue::S(format!("LOGIN#{}", user.login)))
+        .condition_expression("attribute_not_exists(pk) AND attribute_not_exists(sk)")
         .build();
     let put_login_mapping_item = TransactWriteItem::builder().put(put).build();
 
@@ -111,4 +112,33 @@ pub async fn create_next_user(
     let user = user_data.into_user(next_id);
 
     put_new_user(db_client, table_name, user).await
+}
+
+pub async fn update_or_create_user(
+    db_client: &Client,
+    table_name: &str,
+    user_data: CognitoUserData,
+) -> AppResult<User> {
+    let output = db_client
+        .get_item()
+        .table_name(table_name)
+        .key("pk", AttributeValue::S("USERS".to_string()))
+        .key(
+            "sk",
+            AttributeValue::S(format!("LOGIN#{}", user_data.login)),
+        )
+        .send()
+        .await?;
+
+    match output.item().cloned() {
+        None => {
+            info!("user not found, creating new user");
+            create_next_user(db_client, table_name, user_data).await
+        }
+        Some(item) => {
+            let user: User = from_item(item)?;
+            // TODO: if the details of the user in the database are stale, we should update it
+            Ok(user)
+        }
+    }
 }

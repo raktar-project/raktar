@@ -1,10 +1,12 @@
 mod common;
 
-use raktar::models::user::CognitoUserData;
+use raktar::models::user::{CognitoUserData, User};
 use raktar::repository::Repository;
 use tracing_test::traced_test;
 
+use crate::common::setup::create_db_client;
 use common::setup::build_repository;
+use raktar::repository::dynamodb::user::put_new_user;
 
 #[tokio::test]
 #[traced_test]
@@ -46,4 +48,22 @@ async fn test_user_ids_are_incremented() {
 
     assert_eq!(user1.id, 1);
     assert_eq!(user2.id, 2);
+}
+
+#[tokio::test]
+async fn test_cant_put_the_same_user_twice() {
+    let (db_client, table_name) = create_db_client().await;
+
+    let user = User {
+        id: 33,
+        login: "user_x@raktar.io".to_string(),
+        given_name: "Bruce".to_string(),
+        family_name: "Wayne".to_string(),
+    };
+
+    let result = put_new_user(&db_client, &table_name, user.clone()).await;
+    assert!(result.is_ok());
+
+    let result = put_new_user(&db_client, &table_name, user.clone()).await;
+    assert!(result.is_err());
 }
