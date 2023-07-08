@@ -4,7 +4,7 @@ use serde_dynamo::{from_item, from_items, to_item};
 use std::str::FromStr;
 use tracing::info;
 
-use crate::error::AppResult;
+use crate::error::{internal_error, AppResult};
 use crate::models::user::{CognitoUserData, User, UserId};
 
 pub async fn get_user_by_id(
@@ -89,14 +89,13 @@ pub async fn find_next_user_id(db_client: &Client, table_name: &str) -> AppResul
         .send()
         .await?;
 
-    // TODO: review this, it's not safe to silently swallow all these
-    let current_id = output
-        .items()
-        .and_then(|items| items.iter().next())
-        .and_then(|item| item.get("id"))
-        .and_then(|attr| attr.as_n().ok())
-        .and_then(|id_string| u32::from_str(id_string).ok())
-        .unwrap_or(0);
+    let current_id = if let Some(item) = output.items().and_then(|items| items.iter().next()) {
+        let attr = item.get("id").ok_or(internal_error())?;
+        let id_string = attr.as_n().map_err(|_| internal_error())?;
+        u32::from_str(id_string)?
+    } else {
+        0
+    };
 
     Ok(current_id + 1)
 }
