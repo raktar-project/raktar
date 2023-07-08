@@ -1,4 +1,4 @@
-mod user;
+pub mod user;
 
 use anyhow::anyhow;
 use aws_sdk_dynamodb::operation::put_item::PutItemError;
@@ -22,7 +22,7 @@ use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
 use crate::models::user::{CognitoUserData, User, UserId};
-use crate::repository::dynamodb::user::{get_user_by_id, get_users};
+use crate::repository::dynamodb::user::{get_user_by_id, get_users, update_or_create_user};
 use crate::repository::Repository;
 
 static CRATES_PARTITION_KEY: &str = "CRATES";
@@ -214,67 +214,6 @@ impl DynamoDBRepository {
             .await?;
 
         Ok(())
-    }
-
-    async fn create_next_user(&self, user_data: CognitoUserData) -> AppResult<User> {
-        let next_id = self.find_next_user_id().await?;
-        info!("next available ID is {}", next_id);
-
-        let user = user_data.into_user(next_id);
-
-        self.put_new_user(user).await
-    }
-
-    async fn put_new_user(&self, user: User) -> AppResult<User> {
-        let put = Put::builder()
-            .table_name(&self.table_name)
-            .set_item(Some(to_item(user.clone())?))
-            .item("pk", AttributeValue::S("USERS".to_string()))
-            .item("sk", AttributeValue::S(format!("LOGIN#{}", user.login)))
-            .build();
-        let put_login_mapping_item = TransactWriteItem::builder().put(put).build();
-
-        let user_id_sk = AttributeValue::S(format!("ID#{:06}", user.id.clone()));
-        let put = Put::builder()
-            .table_name(&self.table_name)
-            .set_item(Some(to_item(user.clone())?))
-            .item("pk", AttributeValue::S("USERS".to_string()))
-            .item("sk", user_id_sk)
-            .build();
-        let put_user_item = TransactWriteItem::builder().put(put).build();
-
-        self.db_client
-            .transact_write_items()
-            .transact_items(put_login_mapping_item)
-            .transact_items(put_user_item)
-            .send()
-            .await?;
-
-        Ok(user)
-    }
-
-    async fn find_next_user_id(&self) -> AppResult<u32> {
-        let output = self
-            .db_client
-            .query()
-            .table_name(&self.table_name)
-            .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
-            .expression_attribute_values(":pk", AttributeValue::S("USERS".to_string()))
-            .expression_attribute_values(":prefix", AttributeValue::S("ID#".to_string()))
-            .scan_index_forward(false)
-            .send()
-            .await?;
-
-        // TODO: review this, it's not safe to silently swallow all these
-        let current_id = output
-            .items()
-            .and_then(|items| items.iter().next())
-            .and_then(|item| item.get("id"))
-            .and_then(|attr| attr.as_n().ok())
-            .and_then(|id_string| u32::from_str(id_string).ok())
-            .unwrap_or(0);
-
-        Ok(current_id + 1)
     }
 }
 
@@ -617,31 +556,7 @@ impl Repository for DynamoDBRepository {
     /// latest data (e.g. first name and last name being up to date) and bring the
     /// database in line if it's out of sync.
     async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User> {
-        // TODO: should we store down the name?
-        let output = self
-            .db_client
-            .get_item()
-            .table_name(&self.table_name)
-            .key("pk", AttributeValue::S("USERS".to_string()))
-            .key(
-                "sk",
-                AttributeValue::S(format!("LOGIN#{}", user_data.login)),
-            )
-            .send()
-            .await?;
-
-        // TODO: this has a race condition where two processes can both think the user doesn't exist yet
-        match output.item().cloned() {
-            None => {
-                info!("user not found, creating new user");
-                self.create_next_user(user_data).await
-            }
-            Some(item) => {
-                let user: User = from_item(item)?;
-                // TODO: if the details of the user in the database are stale, we should update it
-                Ok(user)
-            }
-        }
+        update_or_create_user(&self.db_client, &self.table_name, user_data).await
     }
 
     async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>> {

@@ -11,7 +11,7 @@ fn generate_random_key() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 16)
 }
 
-pub async fn build_repository() -> DynamoDBRepository {
+pub async fn create_db_client() -> (Client, String) {
     let table_name = generate_random_key();
     let access_key = generate_random_key();
 
@@ -65,6 +65,12 @@ pub async fn build_repository() -> DynamoDBRepository {
         .expect("to be able to create table");
 
     wait_for_table(&db_client, &table_name).await;
+
+    (db_client, table_name)
+}
+
+pub async fn build_repository() -> DynamoDBRepository {
+    let (db_client, table_name) = create_db_client().await;
 
     DynamoDBRepository::new(db_client, table_name)
 }

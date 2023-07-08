@@ -5,6 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use semver::Version;
 use serde_json::json;
+use std::num::ParseIntError;
 use thiserror::Error;
 use tracing::error;
 
@@ -65,6 +66,15 @@ impl From<serde_dynamo::Error> for AppError {
     fn from(err: serde_dynamo::Error) -> Self {
         let error_message = format!("{}", err);
         let error_type = "serde_dynamo".to_string();
+        error!(error_message, error_type, "unexpected error");
+        Self::Other(error_message)
+    }
+}
+
+impl From<ParseIntError> for AppError {
+    fn from(err: ParseIntError) -> Self {
+        let error_message = err.to_string();
+        let error_type = "parse_int_error".to_string();
         error!(error_message, error_type, "unexpected error");
         Self::Other(error_message)
     }
