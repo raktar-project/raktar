@@ -24,7 +24,7 @@ pub trait Repository {
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()>;
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>>;
     async fn add_owners(&self, crate_name: &str, user_ids: Vec<String>) -> AppResult<()>;
-    async fn get_crate_summary(&self, crate_name: &str) -> AppResult<CrateSummary>;
+    async fn get_crate_summary(&self, crate_name: &str) -> AppResult<Option<CrateSummary>>;
     async fn get_all_crate_details(
         &self,
         filter: Option<String>,

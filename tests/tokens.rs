@@ -1,12 +1,13 @@
 mod common;
 
 use async_graphql::{value, Name, Request, Value, Variables};
-use common::setup::build_repository;
-use raktar::auth::AuthenticatedUser;
 use raktar::graphql::schema::build_schema;
 use raktar::repository::DynRepository;
 use std::collections::HashSet;
 use std::sync::Arc;
+
+use common::graphql::build_request;
+use common::setup::build_repository;
 
 #[tokio::test]
 async fn test_token_generation() {
@@ -156,10 +157,4 @@ fn build_my_tokens_request(user_id: u32) -> Request {
       }
     }"#;
     build_request(query, user_id)
-}
-
-fn build_request(request_str: &str, user_id: u32) -> Request {
-    let authenticated_user = AuthenticatedUser { id: user_id };
-    let request: Request = request_str.into();
-    request.data(authenticated_user)
 }
