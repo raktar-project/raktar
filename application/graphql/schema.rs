@@ -66,7 +66,7 @@ impl Query {
         };
         let metadata = repository.get_crate_metadata(&name, &version).await?;
 
-        Ok(Some(metadata.into()))
+        Ok(metadata.map(|m| m.into()))
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {

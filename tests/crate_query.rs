@@ -39,8 +39,50 @@ async fn test_crate_query_with_head_version_works() {
     assert_crate_version(&schema, "testcrate_1", "0.1.2").await;
 }
 
+#[tokio::test]
+async fn test_crate_query_returns_null_when_crate_is_missing() {
+    let repository = Arc::new(build_repository().await) as DynRepository;
+    let schema = build_schema(repository.clone());
+
+    let request = build_crate_request(1, "missing_crate", None);
+    let response = schema.execute(request).await;
+
+    assert_eq!(response.errors.len(), 0);
+    let data = response.data.into_json().unwrap();
+    let crate_version = data.as_object().unwrap().get("crateVersion").unwrap();
+
+    assert!(crate_version.as_null().is_some());
+}
+
+#[tokio::test]
+async fn test_crate_query_returns_null_when_crate_version_is_missing() {
+    let repository = Arc::new(build_repository().await) as DynRepository;
+    let schema = build_schema(repository.clone());
+    let storage = Arc::new(MemoryStorage::default()) as DynCrateStorage;
+    let user = AuthenticatedUser { id: 1 };
+
+    // publish version 0.1.1
+    let data = Bytes::from_static(CRATE_BYTES_V1);
+    publish_crate(user.clone(), storage.clone(), repository.clone(), data)
+        .await
+        .expect("publish to succeed");
+
+    // head state is 0.1.1, assert that the query works and reflects this
+    assert_crate_version(&schema, "testcrate_1", "0.1.1").await;
+
+    // version 0.2.0 does not exist, so the query should return null
+    let request = build_crate_request(1, "testcrate_1", Some("0.2.0"));
+    let response = schema.execute(request).await;
+
+    assert_eq!(response.errors.len(), 0);
+    let data = response.data.into_json().unwrap();
+    let crate_version = data.as_object().unwrap().get("crateVersion").unwrap();
+
+    assert!(crate_version.as_null().is_some());
+}
+
 async fn assert_crate_version(schema: &RaktarSchema, name: &str, expected_version: &str) {
-    let request = build_crate_request(1, name);
+    let request = build_crate_request(1, name, None);
     let response = schema.execute(request).await;
 
     assert_eq!(response.errors.len(), 0);
@@ -57,7 +99,7 @@ async fn assert_crate_version(schema: &RaktarSchema, name: &str, expected_versio
     assert_eq!(actual_version, expected_version);
 }
 
-fn build_crate_request(user_id: u32, name: &str) -> Request {
+fn build_crate_request(user_id: u32, name: &str, version: Option<&str>) -> Request {
     let query = r#"
     query CrateVersion($name: String!, $version: String) {
       crateVersion(name: $name, version: $version) {
@@ -73,7 +115,11 @@ fn build_crate_request(user_id: u32, name: &str) -> Request {
       }
     }
     "#;
-    let variables = Variables::from_value(value!({ "name": name }));
+
+    let variables = match version {
+        None => Variables::from_value(value!({ "name": name })),
+        Some(v) => Variables::from_value(value!({ "name": name, "version": v })),
+    };
 
     build_request(query, user_id).variables(variables)
 }

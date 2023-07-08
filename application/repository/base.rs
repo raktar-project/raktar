@@ -30,7 +30,11 @@ pub trait Repository {
         filter: Option<String>,
         limit: usize,
     ) -> AppResult<Vec<CrateSummary>>;
-    async fn get_crate_metadata(&self, crate_name: &str, version: &Version) -> AppResult<Metadata>;
+    async fn get_crate_metadata(
+        &self,
+        crate_name: &str,
+        version: &Version,
+    ) -> AppResult<Option<Metadata>>;
     async fn list_crate_versions(&self, crate_name: &str) -> AppResult<Vec<Version>>;
     async fn store_auth_token(
         &self,
