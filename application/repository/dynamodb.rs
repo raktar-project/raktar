@@ -16,7 +16,7 @@ use std::str::FromStr;
 use tracing::{error, info};
 
 use crate::auth::AuthenticatedUser;
-use crate::error::{internal_error, AppError, AppResult};
+use crate::error::{AppError, AppResult};
 use crate::models::crate_summary::CrateSummary;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
@@ -486,7 +486,11 @@ impl Repository for DynamoDBRepository {
         Ok(crates)
     }
 
-    async fn get_crate_metadata(&self, crate_name: &str, version: &Version) -> AppResult<Metadata> {
+    async fn get_crate_metadata(
+        &self,
+        crate_name: &str,
+        version: &Version,
+    ) -> AppResult<Option<Metadata>> {
         let result = self
             .db_client
             .get_item()
@@ -496,8 +500,11 @@ impl Repository for DynamoDBRepository {
             .send()
             .await?;
 
-        let item = result.item().cloned().ok_or(internal_error())?;
-        let metadata = from_item(item)?;
+        let metadata = if let Some(item) = result.item().cloned() {
+            from_item(item)?
+        } else {
+            None
+        };
 
         Ok(metadata)
     }
