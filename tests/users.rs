@@ -1,9 +1,10 @@
 mod common;
 
-use common::setup::build_repository;
 use raktar::models::user::CognitoUserData;
 use raktar::repository::Repository;
 use tracing_test::traced_test;
+
+use common::setup::build_repository;
 
 #[tokio::test]
 #[traced_test]

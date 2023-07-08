@@ -432,7 +432,7 @@ impl Repository for DynamoDBRepository {
         Ok(())
     }
 
-    async fn get_crate_summary(&self, crate_name: &str) -> AppResult<CrateSummary> {
+    async fn get_crate_summary(&self, crate_name: &str) -> AppResult<Option<CrateSummary>> {
         let result = self
             .db_client
             .get_item()
@@ -442,10 +442,13 @@ impl Repository for DynamoDBRepository {
             .send()
             .await?;
 
-        let item = result.item().cloned().ok_or(internal_error())?;
-        let crate_details = from_item(item)?;
+        let crate_summary = if let Some(item) = result.item().cloned() {
+            from_item(item)?
+        } else {
+            None
+        };
 
-        Ok(crate_details)
+        Ok(crate_summary)
     }
 
     async fn get_all_crate_details(

@@ -4,6 +4,7 @@ use semver::Version;
 use std::str::FromStr;
 
 use crate::auth::{generate_new_token, AuthenticatedUser};
+use crate::error::AppError;
 use crate::graphql::types::{
     CrateSummary, CrateVersion, DeletedToken, GeneratedToken, Token, User,
 };
@@ -38,9 +39,11 @@ impl Query {
     #[graphql(name = "crate")]
     async fn get_crate(&self, ctx: &Context<'_>, name: String) -> Result<CrateSummary> {
         let repository = ctx.data::<DynRepository>()?;
-        let crate_summary = repository.get_crate_summary(&name).await?;
-
-        Ok(crate_summary.into())
+        if let Some(crate_summary) = repository.get_crate_summary(&name).await? {
+            Ok(crate_summary.into())
+        } else {
+            Err(AppError::NonExistentCrate(name).into())
+        }
     }
 
     async fn crate_version(
@@ -48,19 +51,22 @@ impl Query {
         ctx: &Context<'_>,
         name: String,
         version: Option<String>,
-    ) -> Result<CrateVersion> {
+    ) -> Result<Option<CrateVersion>> {
         let repository = ctx.data::<DynRepository>()?;
 
         let version = match version {
             None => {
-                let summary = repository.get_crate_summary(&name).await?;
-                summary.max_version
+                if let Some(summary) = repository.get_crate_summary(&name).await? {
+                    summary.max_version
+                } else {
+                    return Ok(None);
+                }
             }
             Some(v) => Version::from_str(&v)?,
         };
         let metadata = repository.get_crate_metadata(&name, &version).await?;
 
-        Ok(metadata.into())
+        Ok(Some(metadata.into()))
     }
 
     async fn my_tokens(&self, ctx: &Context<'_>) -> Result<Vec<Token>> {

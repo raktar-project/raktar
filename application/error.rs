@@ -12,6 +12,8 @@ use tracing::error;
 pub enum AppError {
     #[error("package info for {0} does not exist")]
     NonExistentPackageInfo(String),
+    #[error("crate details for {0} does not exist")]
+    NonExistentCrate(String),
     #[error("version {version} for {crate_name} does not exist")]
     NonExistentCrateVersion {
         crate_name: String,
@@ -35,6 +37,7 @@ impl IntoResponse for AppError {
         let detail = &self.to_string();
         let status_code = match &self {
             AppError::NonExistentPackageInfo(_) => StatusCode::NOT_FOUND,
+            AppError::NonExistentCrate(_) => StatusCode::NOT_FOUND,
             AppError::NonExistentCrateVersion { .. } => StatusCode::NOT_FOUND,
             AppError::DuplicateCrateVersion { .. } => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,

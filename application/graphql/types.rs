@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use async_graphql::{ComplexObject, Context, Result, SimpleObject, ID};
 use futures::future::try_join_all;
 
@@ -115,9 +116,11 @@ impl CrateVersion {
     #[graphql(name = "crate")]
     async fn get_crate(&self, ctx: &Context<'_>) -> Result<CrateSummary> {
         let repository = ctx.data::<DynRepository>()?;
-        let crate_summary = repository.get_crate_summary(&self.name).await?;
-
-        Ok(crate_summary.into())
+        if let Some(crate_summary) = repository.get_crate_summary(&self.name).await? {
+            Ok(crate_summary.into())
+        } else {
+            Err(AppError::NonExistentCrate(self.name.clone()).into())
+        }
     }
 }
 
