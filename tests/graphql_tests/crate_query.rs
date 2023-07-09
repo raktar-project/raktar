@@ -1,5 +1,3 @@
-mod common;
-
 use async_graphql::{value, Request, Variables};
 use axum::body::Bytes;
 use raktar::auth::AuthenticatedUser;
@@ -10,9 +8,9 @@ use raktar::storage::DynCrateStorage;
 use serde::Deserialize;
 use std::sync::Arc;
 
-use common::graphql::build_request;
-use common::memory_storage::MemoryStorage;
-use common::setup::build_repository;
+use crate::common::graphql::build_request;
+use crate::common::memory_storage::MemoryStorage;
+use crate::common::setup::build_repository;
 
 #[tokio::test]
 async fn test_crate_query_with_head_version_works() {
