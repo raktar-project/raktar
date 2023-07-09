@@ -71,6 +71,15 @@ impl From<serde_dynamo::Error> for AppError {
     }
 }
 
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        let error_message = format!("{}", err);
+        let error_type = "serde_json".to_string();
+        error!(error_message, error_type, "unexpected error");
+        Self::Other(error_message)
+    }
+}
+
 impl From<ParseIntError> for AppError {
     fn from(err: ParseIntError) -> Self {
         let error_message = err.to_string();

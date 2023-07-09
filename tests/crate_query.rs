@@ -7,6 +7,7 @@ use raktar::cargo_api::publish::publish_crate;
 use raktar::graphql::schema::{build_schema, RaktarSchema};
 use raktar::repository::DynRepository;
 use raktar::storage::DynCrateStorage;
+use serde::Deserialize;
 use std::sync::Arc;
 
 use common::graphql::build_request;
@@ -27,7 +28,8 @@ async fn test_crate_query_with_head_version_works() {
         .expect("publish to succeed");
 
     // head state is 0.1.1, assert that the query works and reflects this
-    assert_crate_version(&schema, "testcrate_1", "0.1.1").await;
+    let crate_version = get_crate_version(&schema, "testcrate_1").await;
+    assert_eq!(crate_version.version, "0.1.1");
 
     // publish version 0.1.2
     let data = Bytes::from_static(CRATE_BYTES_V2);
@@ -36,7 +38,9 @@ async fn test_crate_query_with_head_version_works() {
         .expect("publish to succeed");
 
     // the query should now return 0.1.2
-    assert_crate_version(&schema, "testcrate_1", "0.1.2").await;
+    let crate_version = get_crate_version(&schema, "testcrate_1").await;
+    assert_eq!(crate_version.version, "0.1.2");
+    assert_eq!(crate_version.krate.versions, vec!["0.1.1", "0.1.2"])
 }
 
 #[tokio::test]
@@ -68,7 +72,8 @@ async fn test_crate_query_returns_null_when_crate_version_is_missing() {
         .expect("publish to succeed");
 
     // head state is 0.1.1, assert that the query works and reflects this
-    assert_crate_version(&schema, "testcrate_1", "0.1.1").await;
+    let crate_version = get_crate_version(&schema, "testcrate_1").await;
+    assert_eq!(crate_version.version, "0.1.1");
 
     // version 0.2.0 does not exist, so the query should return null
     let request = build_crate_request(1, "testcrate_1", Some("0.2.0"));
@@ -81,22 +86,33 @@ async fn test_crate_query_returns_null_when_crate_version_is_missing() {
     assert!(crate_version.as_null().is_some());
 }
 
-async fn assert_crate_version(schema: &RaktarSchema, name: &str, expected_version: &str) {
+async fn get_crate_version(schema: &RaktarSchema, name: &str) -> CrateVersion {
     let request = build_crate_request(1, name, None);
     let response = schema.execute(request).await;
 
     assert_eq!(response.errors.len(), 0);
     let data = response.data.into_json().unwrap();
-    let crate_version = data.as_object().unwrap().get("crateVersion").unwrap();
-    let actual_version = crate_version
-        .as_object()
-        .unwrap()
-        .get("version")
-        .unwrap()
-        .as_str()
-        .unwrap();
+    let parsed_response: CrateVersionResponse = serde_json::from_value(data).unwrap();
 
-    assert_eq!(actual_version, expected_version);
+    parsed_response.crate_version
+}
+
+#[derive(Debug, Deserialize)]
+struct CrateVersionResponse {
+    #[serde(rename = "crateVersion")]
+    crate_version: CrateVersion,
+}
+
+#[derive(Debug, Deserialize)]
+struct CrateVersion {
+    version: String,
+    #[serde(rename = "crate")]
+    krate: Crate,
+}
+
+#[derive(Debug, Deserialize)]
+struct Crate {
+    versions: Vec<String>,
 }
 
 fn build_crate_request(user_id: u32, name: &str, version: Option<&str>) -> Request {
