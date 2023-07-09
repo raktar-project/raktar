@@ -4,7 +4,7 @@ use futures::future::try_join_all;
 
 use crate::models::crate_summary::CrateSummary as CrateSummaryModel;
 use crate::models::metadata::Metadata;
-use crate::models::token::TokenItem;
+use crate::models::token::Token as TokenModel;
 use crate::models::user::User as UserModel;
 use crate::repository::DynRepository;
 
@@ -131,8 +131,8 @@ pub struct Token {
     name: String,
 }
 
-impl From<TokenItem> for Token {
-    fn from(item: TokenItem) -> Self {
+impl From<TokenModel> for Token {
+    fn from(item: TokenModel) -> Self {
         Self {
             id: item.token_id.into(),
             user_id: item.user_id,
