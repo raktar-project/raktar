@@ -141,9 +141,9 @@ impl CrateRepository for DynamoDBRepository {
                         version: version.clone(),
                     }
                 }
-                _ => {
-                    // TODO: add more information for the failure
-                    error!("failed to yank package");
+                service_error => {
+                    let error_message = service_error.to_string();
+                    error!(error_message, "failed to yank package");
                     anyhow!("internal server error").into()
                 }
             })?;
