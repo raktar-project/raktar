@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     hosted_zone_domain_name: str
     sso_metadata_url: str
     cognito_domain_prefix: str
+    dev: bool = False
 
     @property
     def app_domain(self) -> str:
