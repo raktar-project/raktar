@@ -39,11 +39,11 @@ impl CrateRepository for DynamoDBRepository {
             None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
             Some(items) => {
                 let infos = from_items::<PackageInfo>(items.to_vec())?;
-                Ok(infos
+                let info_strings: Vec<String> = infos
                     .into_iter()
-                    .map(|info| serde_json::to_string(&info).unwrap())
-                    .collect::<Vec<_>>()
-                    .join("\n"))
+                    .map(|info| serde_json::to_string(&info))
+                    .collect::<Result<Vec<_>, serde_json::Error>>()?;
+                Ok(info_strings.join("\n"))
             }
         }
     }
@@ -383,7 +383,6 @@ async fn put_package_version_with_new_details(
         .build();
     let put_details_item = TransactWriteItem::builder().put(put_item).build();
 
-    // TODO: fix unwrap
     let pk = get_package_key(&package_info.name);
     let sk = get_package_version_key(&package_info.vers);
     let item = to_item(package_info)?;
