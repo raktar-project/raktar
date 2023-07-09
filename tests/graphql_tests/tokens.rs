@@ -1,13 +1,11 @@
-mod common;
-
 use async_graphql::{value, Name, Request, Value, Variables};
 use raktar::graphql::schema::build_schema;
 use raktar::repository::DynRepository;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common::graphql::build_request;
-use common::setup::build_repository;
+use crate::common::graphql::build_request;
+use crate::common::setup::build_repository;
 
 #[tokio::test]
 async fn test_token_generation() {
