@@ -9,7 +9,6 @@ use serde::Deserialize;
 use serde_dynamo::aws_sdk_dynamodb_0_27::from_items;
 use serde_dynamo::{from_item, to_item};
 use std::collections::HashMap;
-use std::str::FromStr;
 use tracing::{error, info};
 
 use crate::auth::AuthenticatedUser;
@@ -267,7 +266,7 @@ impl CrateRepository for DynamoDBRepository {
     async fn list_crate_versions(&self, crate_name: &str) -> AppResult<Vec<Version>> {
         #[derive(Debug, Deserialize)]
         struct QueryItem {
-            sk: String,
+            vers: Version,
         }
 
         let output = self
@@ -277,20 +276,15 @@ impl CrateRepository for DynamoDBRepository {
             .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
             .expression_attribute_values(":pk", get_package_key(crate_name))
             .expression_attribute_values(":prefix", AttributeValue::S("V#".to_string()))
-            .projection_expression("sk")
+            .projection_expression("vers")
             .send()
             .await?;
 
         Ok(match output.items() {
             None => vec![],
-            // TODO: fix unwraps
             Some(items) => {
-                let sort_keys: Vec<QueryItem> = from_items(items.to_vec())?;
-                sort_keys
-                    .into_iter()
-                    .map(|item| item.sk.strip_prefix("V#").unwrap().to_string())
-                    .map(|version_string| Version::from_str(&version_string).unwrap())
-                    .collect()
+                let parsed_items: Vec<QueryItem> = from_items(items.to_vec())?;
+                parsed_items.into_iter().map(|item| item.vers).collect()
             }
         })
     }
