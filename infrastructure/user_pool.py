@@ -4,6 +4,8 @@ from aws_cdk import CfnOutput
 from aws_cdk.aws_lambda import Function
 from constructs import Construct
 
+from infrastructure.settings import Settings
+
 
 class RaktarUserPool(Construct):
     """The Cognito user pool that hosts users."""
@@ -15,8 +17,7 @@ class RaktarUserPool(Construct):
         *,
         pre_token_trigger_function: Function,
         sso_metadata_url: str,
-        app_domain: str,
-        cognito_domain_prefix: str,
+        settings: Settings,
     ) -> None:
         """Set up the user pool."""
         super().__init__(scope, construct_id)
@@ -28,15 +29,15 @@ class RaktarUserPool(Construct):
         self._user_pool_client = self._build_user_pool_client(
             self._user_pool,
             self._sso_provider,
-            app_domain,
+            settings,
         )
         self._user_pool.add_domain(
             "CognitoDomain",
             cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=cognito_domain_prefix
+                domain_prefix=settings.cognito_domain_prefix
             ),
         )
-        domain = f"https://{cognito_domain_prefix}.auth.{self._user_pool.stack.region}.amazoncognito.com"
+        domain = f"https://{settings.cognito_domain_prefix}.auth.{self._user_pool.stack.region}.amazoncognito.com"
         CfnOutput(self, "CognitoDomainOutput", value=domain)
 
     @property
@@ -77,8 +78,14 @@ class RaktarUserPool(Construct):
         self,
         user_pool: cognito.UserPool,
         sso_provider: cognito.UserPoolIdentityProviderSaml,
-        app_domain: str,
+        settings: Settings,
     ) -> cognito.UserPoolClient:
+        callback_urls = [f"https://{settings.app_domain}/cb"]
+        logout_urls = [f"https://{settings.app_domain}"]
+        if settings.dev:
+            callback_urls.append("http://localhost:5173/cb")
+            logout_urls.append("http://localhost:5173")
+
         provider = cognito.UserPoolClientIdentityProvider.custom(
             sso_provider.provider_name
         )
@@ -90,8 +97,8 @@ class RaktarUserPool(Construct):
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(authorization_code_grant=True),
                 scopes=[cognito.OAuthScope.OPENID],
-                callback_urls=[f"https://{app_domain}/cb", "http://localhost/cb"],
-                logout_urls=[f"https://{app_domain}/", "http://localhost"],
+                callback_urls=callback_urls,
+                logout_urls=logout_urls,
             ),
         )
 
