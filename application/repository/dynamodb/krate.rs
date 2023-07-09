@@ -1,12 +1,16 @@
 use anyhow::anyhow;
+use aws_sdk_dynamodb::operation::put_item::PutItemError;
+use aws_sdk_dynamodb::operation::transact_write_items::TransactWriteItemsError;
 use aws_sdk_dynamodb::operation::update_item::UpdateItemError;
-use aws_sdk_dynamodb::types::{AttributeValue, ReturnValue};
+use aws_sdk_dynamodb::types::{AttributeValue, Put, ReturnValue, TransactWriteItem};
+use aws_sdk_dynamodb::Client;
 use semver::Version;
 use serde::Deserialize;
 use serde_dynamo::aws_sdk_dynamodb_0_27::from_items;
-use serde_dynamo::from_item;
+use serde_dynamo::{from_item, to_item};
+use std::collections::HashMap;
 use std::str::FromStr;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::auth::AuthenticatedUser;
 use crate::error::{AppError, AppResult};
@@ -27,7 +31,7 @@ impl CrateRepository for DynamoDBRepository {
             .query()
             .table_name(&self.table_name)
             .key_condition_expression("pk = :pk and begins_with(sk, :prefix)")
-            .expression_attribute_values(":pk", DynamoDBRepository::get_package_key(crate_name))
+            .expression_attribute_values(":pk", get_package_key(crate_name))
             .expression_attribute_values(":prefix", AttributeValue::S("V#".to_string()))
             .send()
             .await?;
@@ -53,7 +57,7 @@ impl CrateRepository for DynamoDBRepository {
         metadata: Metadata,
         authenticated_user: &AuthenticatedUser,
     ) -> AppResult<()> {
-        match self.get_crate_details(crate_name).await? {
+        match get_crate_details(&self.db_client, &self.table_name, crate_name).await? {
             // this is a brand new crate
             None => {
                 let crate_details = CrateSummary {
@@ -62,7 +66,9 @@ impl CrateRepository for DynamoDBRepository {
                     max_version: package_info.vers.clone(),
                     description: metadata.description.clone().unwrap_or("".to_string()),
                 };
-                self.put_package_version_with_new_details(
+                put_package_version_with_new_details(
+                    &self.db_client,
+                    &self.table_name,
                     crate_name,
                     version,
                     package_info,
@@ -89,7 +95,9 @@ impl CrateRepository for DynamoDBRepository {
                         max_version: package_info.vers.clone(),
                         description: metadata.description.clone().unwrap_or("".to_string()),
                     };
-                    self.put_package_version_with_new_details(
+                    put_package_version_with_new_details(
+                        &self.db_client,
+                        &self.table_name,
                         crate_name,
                         version,
                         package_info,
@@ -98,18 +106,24 @@ impl CrateRepository for DynamoDBRepository {
                     )
                     .await?;
                 } else {
-                    self.put_package_version(crate_name, version, package_info)
-                        .await?;
+                    put_package_version(
+                        &self.db_client,
+                        &self.table_name,
+                        crate_name,
+                        version,
+                        package_info,
+                    )
+                    .await?;
                 }
             }
         }
 
-        self.put_package_metadata(metadata).await
+        put_package_metadata(&self.db_client, &self.table_name, metadata).await
     }
 
     async fn set_yanked(&self, crate_name: &str, version: &Version, yanked: bool) -> AppResult<()> {
-        let pk = DynamoDBRepository::get_package_key(crate_name);
-        let sk = DynamoDBRepository::get_package_version_key(version);
+        let pk = get_package_key(crate_name);
+        let sk = get_package_version_key(version);
 
         self.db_client
             .update_item()
@@ -139,7 +153,7 @@ impl CrateRepository for DynamoDBRepository {
     }
 
     async fn list_owners(&self, crate_name: &str) -> AppResult<Vec<User>> {
-        match self.get_crate_details(crate_name).await? {
+        match get_crate_details(&self.db_client, &self.table_name, crate_name).await? {
             None => Err(AppError::NonExistentPackageInfo(crate_name.to_string())),
             Some(crate_details) => {
                 let users = crate_details
@@ -162,7 +176,7 @@ impl CrateRepository for DynamoDBRepository {
         self.db_client
             .update_item()
             .table_name(&self.table_name)
-            .set_key(self.get_crate_info_key(crate_name.to_string()))
+            .set_key(get_crate_info_key(crate_name.to_string()))
             .update_expression("ADD #owners = :new_owners")
             .expression_attribute_names("#owners", "owners".to_string())
             .expression_attribute_values(":new_owners", AttributeValue::Ss(user_ids))
@@ -236,8 +250,8 @@ impl CrateRepository for DynamoDBRepository {
             .db_client
             .get_item()
             .table_name(&self.table_name)
-            .key("pk", DynamoDBRepository::get_package_key(crate_name))
-            .key("sk", DynamoDBRepository::get_package_metadata_key(version))
+            .key("pk", get_package_key(crate_name))
+            .key("sk", get_package_metadata_key(version))
             .send()
             .await?;
 
@@ -261,7 +275,7 @@ impl CrateRepository for DynamoDBRepository {
             .query()
             .table_name(&self.table_name)
             .key_condition_expression("pk = :pk AND begins_with(sk, :prefix)")
-            .expression_attribute_values(":pk", DynamoDBRepository::get_package_key(crate_name))
+            .expression_attribute_values(":pk", get_package_key(crate_name))
             .expression_attribute_values(":prefix", AttributeValue::S("V#".to_string()))
             .projection_expression("sk")
             .send()
@@ -280,4 +294,179 @@ impl CrateRepository for DynamoDBRepository {
             }
         })
     }
+}
+
+async fn put_package_metadata(
+    db_client: &Client,
+    table_name: &str,
+    metadata: Metadata,
+) -> AppResult<()> {
+    let pk = get_package_key(&metadata.name);
+    let sk = get_package_metadata_key(&metadata.vers);
+    let item = to_item(metadata)?;
+    db_client
+        .put_item()
+        .table_name(table_name)
+        .set_item(Some(item))
+        .item("pk", pk)
+        .item("sk", sk)
+        .send()
+        .await?;
+
+    Ok(())
+}
+
+async fn put_package_version(
+    db_client: &Client,
+    table_name: &str,
+    crate_name: &str,
+    version: &Version,
+    package_info: PackageInfo,
+) -> AppResult<()> {
+    let pk = get_package_key(&package_info.name);
+    let sk = get_package_version_key(&package_info.vers);
+
+    let item = to_item(package_info)?;
+    match db_client
+        .put_item()
+        .table_name(table_name)
+        .set_item(Some(item))
+        .item("pk", pk)
+        .item("sk", sk)
+        .condition_expression("attribute_not_exists(sk)")
+        .send()
+        .await
+    {
+        Ok(_) => {
+            info!(
+                crate_name = crate_name,
+                version = version.to_string(),
+                "persisted package info"
+            );
+            Ok(())
+        }
+        Err(err) => {
+            let err = match err.into_service_error() {
+                PutItemError::ConditionalCheckFailedException(_) => {
+                    AppError::DuplicateCrateVersion {
+                        crate_name: crate_name.to_string(),
+                        version: version.clone(),
+                    }
+                }
+                _ => {
+                    error!("failed to store package info");
+                    anyhow::anyhow!("unexpected error in persisting crate").into()
+                }
+            };
+
+            Err(err)
+        }
+    }
+}
+
+async fn put_package_version_with_new_details(
+    db_client: &Client,
+    table_name: &str,
+    crate_name: &str,
+    version: &Version,
+    package_info: PackageInfo,
+    crate_details: CrateSummary,
+    is_new: bool,
+) -> AppResult<()> {
+    let item = to_item(crate_details)?;
+    // TODO: when it's not new, this should probably verify we're not overwriting a competing write
+    let condition_expression = if is_new {
+        Some("attribute_not_exists(sk)".to_string())
+    } else {
+        None
+    };
+    let put_item = Put::builder()
+        .table_name(table_name)
+        .set_item(Some(item))
+        .item("pk", AttributeValue::S(CRATES_PARTITION_KEY.to_string()))
+        .item("sk", AttributeValue::S(crate_name.to_string()))
+        .set_condition_expression(condition_expression)
+        .build();
+    let put_details_item = TransactWriteItem::builder().put(put_item).build();
+
+    // TODO: fix unwrap
+    let pk = get_package_key(&package_info.name);
+    let sk = get_package_version_key(&package_info.vers);
+    let item = to_item(package_info)?;
+    let put = Put::builder()
+        .table_name(table_name)
+        .set_item(Some(item))
+        .item("pk", pk)
+        .item("sk", sk)
+        .build();
+    let put_item = TransactWriteItem::builder().put(put).build();
+
+    match db_client
+        .transact_write_items()
+        .transact_items(put_details_item)
+        .transact_items(put_item)
+        .send()
+        .await
+    {
+        Ok(_) => {
+            info!(
+                crate_name = crate_name,
+                version = version.to_string(),
+                "persisted package info"
+            );
+            Ok(())
+        }
+        Err(e) => Err(match e.into_service_error() {
+            TransactWriteItemsError::TransactionCanceledException(_) => {
+                // TODO: how should we handle this? retry? fail?
+                anyhow::anyhow!("write conflict on new crate").into()
+            }
+            _ => anyhow::anyhow!("unexpected error in persisting crate").into(),
+        }),
+    }
+}
+
+async fn get_crate_details(
+    db_client: &Client,
+    table_name: &str,
+    crate_name: &str,
+) -> AppResult<Option<CrateSummary>> {
+    let res = db_client
+        .get_item()
+        .table_name(table_name)
+        .set_key(get_crate_info_key(crate_name.to_string()))
+        .send()
+        .await?;
+
+    let details = if let Some(item) = res.item {
+        let crate_info: CrateSummary = from_item(item)?;
+
+        Some(crate_info)
+    } else {
+        None
+    };
+
+    Ok(details)
+}
+
+fn get_package_key(crate_name: &str) -> AttributeValue {
+    AttributeValue::S(format!("CRT#{}", crate_name))
+}
+
+fn get_package_version_key(version: &Version) -> AttributeValue {
+    AttributeValue::S(format!("V#{}", version))
+}
+
+fn get_package_metadata_key(version: &Version) -> AttributeValue {
+    AttributeValue::S(format!("META#{}", version))
+}
+
+fn get_crate_info_key(crate_name: String) -> Option<HashMap<String, AttributeValue>> {
+    let mut key = HashMap::new();
+    key.insert(
+        "pk".to_string(),
+        AttributeValue::S(CRATES_PARTITION_KEY.to_string()),
+    );
+    key.insert("sk".to_string(), AttributeValue::S(crate_name));
+    Some(key)
 }
