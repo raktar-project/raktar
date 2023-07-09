@@ -27,3 +27,13 @@ impl CognitoUserData {
         }
     }
 }
+
+impl From<User> for CognitoUserData {
+    fn from(user: User) -> Self {
+        Self {
+            login: user.login,
+            given_name: user.given_name,
+            family_name: user.family_name,
+        }
+    }
+}

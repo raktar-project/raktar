@@ -6,7 +6,7 @@ use tracing_test::traced_test;
 
 use crate::common::setup::create_db_client;
 use common::setup::build_repository;
-use raktar::repository::dynamodb::user::put_new_user;
+use raktar::repository::dynamodb::user::put_user;
 
 #[tokio::test]
 #[traced_test]
@@ -51,7 +51,7 @@ async fn test_user_ids_are_incremented() {
 }
 
 #[tokio::test]
-async fn test_cant_put_the_same_user_twice() {
+async fn test_cant_put_the_same_new_user_twice() {
     let (db_client, table_name) = create_db_client().await;
 
     let user = User {
@@ -61,9 +61,27 @@ async fn test_cant_put_the_same_user_twice() {
         family_name: "Wayne".to_string(),
     };
 
-    let result = put_new_user(&db_client, &table_name, user.clone()).await;
+    let result = put_user(&db_client, &table_name, user.clone(), true).await;
     assert!(result.is_ok());
 
-    let result = put_new_user(&db_client, &table_name, user.clone()).await;
+    let result = put_user(&db_client, &table_name, user.clone(), true).await;
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_updating_user_works() {
+    let (db_client, table_name) = create_db_client().await;
+
+    let user = User {
+        id: 33,
+        login: "user_x@raktar.io".to_string(),
+        given_name: "Bruce".to_string(),
+        family_name: "Wayne".to_string(),
+    };
+
+    let result = put_user(&db_client, &table_name, user.clone(), false).await;
+    assert!(result.is_ok());
+
+    let result = put_user(&db_client, &table_name, user.clone(), false).await;
+    assert!(result.is_ok());
 }
