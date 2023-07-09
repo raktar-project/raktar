@@ -1,3 +1,5 @@
+mod user;
+
 use std::sync::Arc;
 
 use semver::Version;
@@ -8,10 +10,11 @@ use crate::models::crate_summary::CrateSummary;
 use crate::models::index::PackageInfo;
 use crate::models::metadata::Metadata;
 use crate::models::token::TokenItem;
-use crate::models::user::{CognitoUserData, User, UserId};
+use crate::models::user::User;
+pub use crate::repository::base::user::UserRepository;
 
 #[async_trait::async_trait]
-pub trait Repository {
+pub trait Repository: UserRepository {
     async fn get_package_info(&self, crate_name: &str) -> AppResult<String>;
     async fn store_package_info(
         &self,
@@ -45,9 +48,6 @@ pub trait Repository {
     async fn delete_auth_token(&self, user_id: u32, token_id: String) -> AppResult<()>;
     async fn list_auth_tokens(&self, user_id: u32) -> AppResult<Vec<TokenItem>>;
     async fn get_auth_token(&self, token: &[u8]) -> AppResult<Option<TokenItem>>;
-    async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User>;
-    async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>>;
-    async fn get_users(&self) -> AppResult<Vec<User>>;
 }
 
 pub type DynRepository = Arc<dyn Repository + Send + Sync>;

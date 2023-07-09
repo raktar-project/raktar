@@ -1,7 +1,7 @@
 mod common;
 
 use raktar::models::user::{CognitoUserData, User};
-use raktar::repository::Repository;
+use raktar::repository::UserRepository;
 use tracing_test::traced_test;
 
 use crate::common::setup::create_db_client;

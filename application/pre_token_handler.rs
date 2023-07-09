@@ -7,7 +7,7 @@ use serde_json::{to_value, Value};
 use tokio::sync::OnceCell;
 use tracing::{error, info, Level};
 
-use raktar::repository::{DynamoDBRepository, Repository};
+use raktar::repository::{DynamoDBRepository, UserRepository};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
