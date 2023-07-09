@@ -6,45 +6,81 @@ use tracing::info;
 
 use crate::error::{internal_error, AppResult};
 use crate::models::user::{CognitoUserData, User, UserId};
+use crate::repository::base::UserRepository;
+use crate::repository::DynamoDBRepository;
 
-pub async fn get_user_by_id(
-    db_client: &Client,
-    table_name: &str,
-    user_id: UserId,
-) -> AppResult<Option<User>> {
-    let sk = format!("ID#{:06}", user_id);
-    let output = db_client
-        .get_item()
-        .table_name(table_name)
-        .key("pk", AttributeValue::S("USERS".to_string()))
-        .key("sk", AttributeValue::S(sk))
-        .send()
-        .await?;
+#[async_trait::async_trait]
+impl UserRepository for DynamoDBRepository {
+    async fn update_or_create_user(&self, user_data: CognitoUserData) -> AppResult<User> {
+        let output = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", AttributeValue::S("USERS".to_string()))
+            .key(
+                "sk",
+                AttributeValue::S(format!("LOGIN#{}", user_data.login)),
+            )
+            .send()
+            .await?;
 
-    let user = if let Some(item) = output.item().cloned() {
-        Some(serde_dynamo::from_item(item)?)
-    } else {
-        None
-    };
+        match output.item().cloned() {
+            None => {
+                info!("user not found, creating new user");
+                create_next_user(&self.db_client, &self.table_name, user_data).await
+            }
+            Some(item) => {
+                let user: User = from_item(item)?;
 
-    Ok(user)
-}
+                // if the existing user data is out of sync, update it
+                let existing_user_data: CognitoUserData = user.clone().into();
+                if existing_user_data != user_data {
+                    let new_user = user_data.into_user(user.id);
+                    put_user(&self.db_client, &self.table_name, new_user, false).await?;
+                }
 
-pub async fn get_users(db_client: &Client, table_name: &str) -> AppResult<Vec<User>> {
-    let output = db_client
-        .query()
-        .table_name(table_name)
-        .key_condition_expression("pk = :pk and begins_with(sk, :prefix)")
-        .expression_attribute_values(":pk", AttributeValue::S("USERS".to_string()))
-        .expression_attribute_values(":prefix", AttributeValue::S("ID#".to_string()))
-        .send()
-        .await?;
+                Ok(user)
+            }
+        }
+    }
 
-    match output.items() {
-        None => Ok(vec![]),
-        Some(items) => {
-            let users = from_items(items.to_vec())?;
-            Ok(users)
+    async fn get_user_by_id(&self, user_id: UserId) -> AppResult<Option<User>> {
+        let sk = format!("ID#{:06}", user_id);
+        let output = self
+            .db_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("pk", AttributeValue::S("USERS".to_string()))
+            .key("sk", AttributeValue::S(sk))
+            .send()
+            .await?;
+
+        let user = if let Some(item) = output.item().cloned() {
+            Some(from_item(item)?)
+        } else {
+            None
+        };
+
+        Ok(user)
+    }
+
+    async fn get_users(&self) -> AppResult<Vec<User>> {
+        let output = self
+            .db_client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression("pk = :pk and begins_with(sk, :prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S("USERS".to_string()))
+            .expression_attribute_values(":prefix", AttributeValue::S("ID#".to_string()))
+            .send()
+            .await?;
+
+        match output.items() {
+            None => Ok(vec![]),
+            Some(items) => {
+                let users = from_items(items.to_vec())?;
+                Ok(users)
+            }
         }
     }
 }
@@ -121,40 +157,4 @@ pub async fn create_next_user(
     let user = user_data.into_user(next_id);
 
     put_user(db_client, table_name, user, true).await
-}
-
-pub async fn update_or_create_user(
-    db_client: &Client,
-    table_name: &str,
-    user_data: CognitoUserData,
-) -> AppResult<User> {
-    let output = db_client
-        .get_item()
-        .table_name(table_name)
-        .key("pk", AttributeValue::S("USERS".to_string()))
-        .key(
-            "sk",
-            AttributeValue::S(format!("LOGIN#{}", user_data.login)),
-        )
-        .send()
-        .await?;
-
-    match output.item().cloned() {
-        None => {
-            info!("user not found, creating new user");
-            create_next_user(db_client, table_name, user_data).await
-        }
-        Some(item) => {
-            let user: User = from_item(item)?;
-
-            // if the existing user data is out of sync, update it
-            let existing_user_data: CognitoUserData = user.clone().into();
-            if existing_user_data != user_data {
-                let new_user = user_data.into_user(user.id);
-                put_user(db_client, table_name, new_user, false).await?;
-            }
-
-            Ok(user)
-        }
-    }
 }
