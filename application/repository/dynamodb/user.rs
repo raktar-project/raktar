@@ -49,13 +49,23 @@ pub async fn get_users(db_client: &Client, table_name: &str) -> AppResult<Vec<Us
     }
 }
 
-pub async fn put_new_user(db_client: &Client, table_name: &str, user: User) -> AppResult<User> {
+pub async fn put_user(
+    db_client: &Client,
+    table_name: &str,
+    user: User,
+    is_new: bool,
+) -> AppResult<User> {
+    let condition = if is_new {
+        Some("attribute_not_exists(pk) AND attribute_not_exists(sk)".to_string())
+    } else {
+        None
+    };
     let put = Put::builder()
         .table_name(table_name)
         .set_item(Some(to_item(user.clone())?))
         .item("pk", AttributeValue::S("USERS".to_string()))
         .item("sk", AttributeValue::S(format!("LOGIN#{}", user.login)))
-        .condition_expression("attribute_not_exists(pk) AND attribute_not_exists(sk)")
+        .set_condition_expression(condition)
         .build();
     let put_login_mapping_item = TransactWriteItem::builder().put(put).build();
 
@@ -110,7 +120,7 @@ pub async fn create_next_user(
 
     let user = user_data.into_user(next_id);
 
-    put_new_user(db_client, table_name, user).await
+    put_user(db_client, table_name, user, true).await
 }
 
 pub async fn update_or_create_user(
@@ -136,7 +146,14 @@ pub async fn update_or_create_user(
         }
         Some(item) => {
             let user: User = from_item(item)?;
-            // TODO: if the details of the user in the database are stale, we should update it
+
+            // if the existing user data is out of sync, update it
+            let existing_user_data: CognitoUserData = user.clone().into();
+            if existing_user_data != user_data {
+                let new_user = user_data.into_user(user.id);
+                put_user(db_client, table_name, new_user, false).await?;
+            }
+
             Ok(user)
         }
     }
