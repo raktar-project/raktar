@@ -7,3 +7,4 @@ __pycache__/
 deploy.sh
 update-code.sh
 infrastructure/.env
+docker/dynamodb
