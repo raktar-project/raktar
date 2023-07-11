@@ -6,6 +6,7 @@
 pub mod config;
 pub mod download;
 pub mod index;
+pub mod me;
 pub mod owners;
 pub mod publish;
 pub mod unyank;
