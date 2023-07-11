@@ -4,6 +4,7 @@ use crate::cargo_api::download::download_crate;
 use crate::cargo_api::index::{
     get_info_for_long_name_crate, get_info_for_short_name_crate, get_info_for_three_letter_crate,
 };
+use crate::cargo_api::me::redirect_for_token;
 use crate::cargo_api::owners::{add_owners, list_owners};
 use crate::cargo_api::publish::publish_crate_handler;
 use crate::cargo_api::unyank::unyank;
@@ -24,6 +25,7 @@ pub fn build_router(repository: DynRepository, storage: DynCrateStorage) -> Rout
 
     Router::new()
         .route("/config.json", get(get_config_json))
+        .route("/me", get(redirect_for_token))
         .nest("/", core_router)
         .nest("/gql", graphql_router)
         .with_state(state)
