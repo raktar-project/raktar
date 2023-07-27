@@ -8,3 +8,4 @@ deploy.sh
 update-code.sh
 infrastructure/.env
 docker/dynamodb
+**/.DS_Store
