@@ -86,14 +86,16 @@ class RaktarUserPool(Construct):
             callback_urls.append("http://localhost:5173/cb")
             logout_urls.append("http://localhost:5173")
 
-        provider = cognito.UserPoolClientIdentityProvider.custom(
+        cognito_provider = cognito.UserPoolClientIdentityProvider.COGNITO
+        custom_provider = cognito.UserPoolClientIdentityProvider.custom(
             sso_provider.provider_name
         )
+
         return cognito.UserPoolClient(
             self,
             "CognitoClient",
             user_pool=user_pool,
-            supported_identity_providers=[provider],
+            supported_identity_providers=[cognito_provider, custom_provider],
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(authorization_code_grant=True),
                 scopes=[cognito.OAuthScope.OPENID],
