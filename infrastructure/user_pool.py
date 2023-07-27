@@ -4,6 +4,7 @@ from aws_cdk import CfnOutput
 from aws_cdk.aws_lambda import Function
 from constructs import Construct
 
+from infrastructure.hosted_ui import HostedUI
 from infrastructure.settings import Settings
 
 
@@ -38,6 +39,10 @@ class RaktarUserPool(Construct):
             ),
         )
         domain = f"https://{settings.cognito_domain_prefix}.auth.{self._user_pool.stack.region}.amazoncognito.com"
+        HostedUI(
+            self, "HostedUICustomisations", self._user_pool, self._user_pool_client
+        )
+
         CfnOutput(self, "CognitoDomainOutput", value=domain)
 
     @property

@@ -27,6 +27,7 @@ select = ["A", "B", "D", "E", "F", "N"]
 ignore = [
     "D203",
     "D213",
+    "E501",
 ]
 
 exclude = [
@@ -34,7 +35,8 @@ exclude = [
     ".venv",
     "cdk.out",
     ".git",
-    ".ruff_cache"
+    ".ruff_cache",
+    "infrastructure/custom_resources/*"
 ]
 
 [tool.mypy]
