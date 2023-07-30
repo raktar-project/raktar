@@ -1,6 +1,8 @@
 """Cognito infrastructure."""
+import aws_cdk.aws_certificatemanager as certificate_manager
 import aws_cdk.aws_cognito as cognito
-from aws_cdk import CfnOutput
+import aws_cdk.aws_route53 as route53
+import aws_cdk.aws_route53_targets as route53_targets
 from aws_cdk.aws_lambda import Function
 from constructs import Construct
 
@@ -19,6 +21,8 @@ class RaktarUserPool(Construct):
         pre_token_trigger_function: Function,
         sso_metadata_url: str,
         settings: Settings,
+        hosted_zone: route53.IHostedZone,
+        hosted_ui_certificate: certificate_manager.Certificate,
     ) -> None:
         """Set up the user pool."""
         super().__init__(scope, construct_id)
@@ -32,18 +36,24 @@ class RaktarUserPool(Construct):
             self._sso_provider,
             settings,
         )
-        self._user_pool.add_domain(
+        user_pool_domain = self._user_pool.add_domain(
             "CognitoDomain",
-            cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=settings.cognito_domain_prefix
+            custom_domain=cognito.CustomDomainOptions(
+                certificate=hosted_ui_certificate,
+                domain_name=settings.cognito_domain,
             ),
         )
-        domain = f"https://{settings.cognito_domain_prefix}.auth.{self._user_pool.stack.region}.amazoncognito.com"
+        target = route53_targets.UserPoolDomainTarget(user_pool_domain)
+        route53.ARecord(
+            self,
+            "CognitoRecord",
+            zone=hosted_zone,
+            record_name=settings.cognito_domain,
+            target=route53.RecordTarget.from_alias(target),
+        )
         HostedUI(
             self, "HostedUICustomisations", self._user_pool, self._user_pool_client
         )
-
-        CfnOutput(self, "CognitoDomainOutput", value=domain)
 
     @property
     def user_pool_id(self) -> str:

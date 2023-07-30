@@ -7,7 +7,6 @@ class Settings(BaseSettings):
 
     hosted_zone_domain_name: str
     sso_metadata_url: str
-    cognito_domain_prefix: str
     dev: bool = False
 
     @property
@@ -19,6 +18,11 @@ class Settings(BaseSettings):
     def api_domain(self) -> str:
         """The domain where the API is served."""
         return f"api.{self.app_domain}"
+
+    @property
+    def cognito_domain(self) -> str:
+        """The domain of the hosted UI."""
+        return f"auth.{self.app_domain}"
 
     class Config:
         """Config for the settings."""
