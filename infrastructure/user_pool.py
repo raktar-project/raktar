@@ -128,7 +128,7 @@ class RaktarUserPool(Construct):
             self,
             "SSOProvider",
             metadata=cognito.UserPoolIdentityProviderSamlMetadata.url(sso_metadata_url),
-            name="sso-provider",
+            name="SSO",
             user_pool=user_pool,
             attribute_mapping=cognito.AttributeMapping(
                 given_name=cognito.ProviderAttribute.other("given_name"),
