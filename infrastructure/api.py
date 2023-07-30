@@ -43,12 +43,12 @@ class WebApi(Construct):
         api_name: str,
         api_lambda: Function,
         user_pool: RaktarUserPool,
+        hosted_zone: route53.IHostedZone,
         settings: Settings,
     ):
         """Create the API."""
         super().__init__(scope, construct_id)
 
-        hosted_zone = self.get_hosted_zone(settings)
         certificate = acm.Certificate(
             self,
             "APICertificate",
@@ -133,14 +133,6 @@ class WebApi(Construct):
         """Create a custom domain for the API gateway."""
         return DomainName(
             self, "APIDomainName", domain_name=domain_name, certificate=certificate
-        )
-
-    def get_hosted_zone(self, settings: Settings) -> route53.IHostedZone:
-        """Get the hosted zone where the record routing to the API will be created."""
-        return route53.HostedZone.from_lookup(
-            self,
-            "HostedZone",
-            domain_name=settings.hosted_zone_domain_name,
         )
 
     def build_http_authorizer(self, pool_id: str, client_id: str) -> HttpJwtAuthorizer:

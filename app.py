@@ -3,6 +3,7 @@ import os
 
 import aws_cdk as cdk
 
+from infrastructure.certificate_stack import HostedUICertificateStack
 from infrastructure.settings import Settings
 from infrastructure.stack import RaktarStack
 
@@ -19,11 +20,18 @@ except KeyError as e:
 
 settings = Settings()
 
+hosted_ui_certificate_stack = HostedUICertificateStack(
+    app,
+    "RaktarHostedUICertificateStack",
+    settings=settings,
+)
+
 RaktarStack(
     app,
     "RaktarStack",
     cdk_env=cdk_env,
     settings=settings,
+    hosted_ui_certificate=hosted_ui_certificate_stack.certificate,
 )
 
 app.synth()
