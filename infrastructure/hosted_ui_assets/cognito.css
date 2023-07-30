@@ -26,16 +26,18 @@
     width: 100%;
     color: #fff;
     background-color: #5e6ca9;
+    border-color: #5e6ca9;
 }
 
 .submitButton-customizable:hover {
     color: #fff;
-    background-color: gray;
+    background-color: #3a4266;
 }
 
 .idpButton-customizable:hover {
     color: #fff;
-    background-color: gray;
+    background-color: #3a4266;
+    border-color: #5e6ca9;
 }
 
 .inputField-customizable:focus {
